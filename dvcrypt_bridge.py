@@ -1,10 +1,11 @@
 import os
+import socket
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# مسار ملف السجل أو قاعدة البيانات التي تستخرج منها بيانات المشتركين
-LOG_FILE_PATH = "log_2.txt"
+# المسار المباشر لملف السجلات داخل مجلد البرنامج
+LOG_FILE_PATH = r"C:\Users\user\DVCrypt\log_2.txt"  # أكتب المسار الصحيح تماماً هنا
 
 
 @app.route("/api/search", methods=["GET"])
@@ -14,10 +15,8 @@ def search_card():
   if not card_no:
     return jsonify({"status": "error", "message": "الرجاء إدخال رقم الكارت"}), 400
 
-  # تنسيق رقم الكارت ليكطابق شكل الجدول (مثلاً 000001 أو الأرقام المدخلة)
-  formatted_card = card_no.zfill(5)  # لضبط الأصفار البادئة إذا لزم الأمر
-
-  subscriber_name = f"مشترك جديد ({card_no})"
+  formatted_card = card_no.zfill(6)
+  subscriber_name = f"مشترك ({card_no})"
   state_info = "Not used"
   package_info = "باقة معتمدة"
   details_info = "لم يتم العثور على بيانات مطابقة"
@@ -26,7 +25,6 @@ def search_card():
     if os.path.exists(LOG_FILE_PATH):
       with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
-        # البحث في السجلات عن رقم المشترك واستخراج حالته
         for line in reversed(lines):
           if card_no in line or formatted_card in line:
             if "Active" in line or "Activated" in line:
@@ -35,13 +33,15 @@ def search_card():
             elif "ended" in line or "Subscription ended" in line:
               state_info = "Subscription ended"
               details_info = "انتهت صلاحية الاشتراك"
+            elif "subscription date changed" in line:
+              state_info = "Active"
+              details_info = "تم تحديث تاريخ الاشتراك بنجاح"
             break
     else:
-      details_info = "ملف البيانات غير موجود"
+      details_info = "ملف السجل غير موجود في المسار المحدد"
   except Exception as e:
     details_info = f"خطأ في قراءة البيانات: {str(e)}"
 
-  # إرجاع البيانات لواجهة الويب
   return jsonify({
       "status": "success",
       "card": card_no,
