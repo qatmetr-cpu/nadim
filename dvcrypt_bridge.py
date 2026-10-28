@@ -15,16 +15,82 @@ agents_db = {
 cards_cloud_db = {}
 audit_logs = []
 
+# واجهة الموقع مباشرة داخل الكود لتجنب أي مشاكل في مسار الملفات
+HTML_CONTENT = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة ALSAFA TV</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; text-align: center; }
+        .container { max-width: 500px; margin: 50px auto; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: none; font-size: 16px; box-sizing: border-box; }
+        input { background: #2c2c2c; color: #fff; }
+        button { background: #00bcd4; color: #fff; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0097a7; }
+        .status { margin-top: 15px; color: #4caf50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>نظام إدارة ALSAFA TV السحابي</h2>
+        <div id="login-section">
+            <input type="text" id="username" placeholder="اسم المستخدم">
+            <input type="password" id="password" placeholder="كلمة المرور">
+            <button onclick="login()">تسجيل الدخول</button>
+        </div>
+        <div id="dashboard" style="display:none;">
+            <h3 id="welcome-msg"></h3>
+            <input type="text" id="card-id" placeholder="أدخل رقم الكارت أو المشترك">
+            <button onclick="searchCard()">بحث عن الكارت</button>
+            <div id="result" style="margin-top:20px; text-align:right; background:#2c2c2c; padding:15px; border-radius:6px;"></div>
+        </div>
+        <p class="status">السيرفر متصل بنجاح 🟢</p>
+    </div>
+
+    <script>
+        let currentUser = "";
+        async function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if(res.ok) {
+                currentUser = u;
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                document.getElementById('welcome-msg').innerText = "مرحباً بك، " + u;
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function searchCard() {
+            const card = document.getElementById('card-id').value;
+            if(!card) return alert('يرجى إدخال رقم الكارت');
+            const res = await fetch(`/api/search?card=${card}&agent=${currentUser}`);
+            const data = await res.json();
+            document.getElementById('result').innerHTML = `
+                <b>اسم المشترك:</b> ${data.subscriber_name}<br>
+                <b>الحالة:</b> ${data.status}<br>
+                <b>الباقة:</b> ${data.package}<br>
+                <b>تاريخ الانتهاء:</b> ${data.expiry_date}
+            `;
+        }
+    </script>
+</body>
+</html>
+"""
+
 @app.route('/', methods=['GET'])
 def home():
-    try:
-        if os.path.exists('index.html'):
-            with open('index.html', 'r', encoding='utf-8') as f:
-                return f.read(), 200
-        else:
-            return "ملف index.html غير موجود في المستودع", 404
-    except Exception as e:
-        return str(e), 500
+    return HTML_CONTENT, 200
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -41,22 +107,6 @@ def login():
         }), 200
     else:
         return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة"}), 401
-
-@app.route('/api/add-agent', methods=['POST'])
-def add_agent():
-    data = request.json or {}
-    admin_user = data.get('admin_user')
-    new_name = data.get('new_username')
-    new_pass = data.get('new_password')
-
-    if admin_user != ADMIN_USER:
-        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي بإضافة وكلاء"}), 403
-
-    if not new_name or not new_pass:
-        return jsonify({"message": "يرجى إدخال بيانات الوكيل الجديد"}), 400
-
-    agents_db[new_name] = new_pass
-    return jsonify({"message": f"تم إضافة الوكيل {new_name} بنجاح"}), 200
 
 @app.route('/api/search', methods=['GET'])
 def search_card():
@@ -85,43 +135,6 @@ def search_card():
             "package": "غير محددة",
             "expiry_date": "متاح للشحن والتسديد"
         }), 200
-
-@app.route('/api/pay', methods=['POST'])
-def process_payment():
-    data = request.json or {}
-    card_id = data.get('card_number')
-    months = data.get('months')
-    price = data.get('price')
-    agent = data.get('agent', 'unknown')
-
-    if not card_id or not months or not price:
-        return jsonify({"message": "بيانات التسديد غير مكتملة"}), 400
-
-    price_table = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000}
-    
-    if int(months) in price_table and int(price) != price_table[int(months)]:
-        return jsonify({"message": "خطأ في مطابقة السعر المحدد للباقة"}), 400
-
-    cards_cloud_db[card_id] = {
-        "subscriber_name": f"مشترك رقم {card_id}",
-        "status": "Active subscriber",
-        "package": f"باقة {months} أشهر",
-        "expiry_date": f"تم التمديد لمدة {months} أشهر"
-    }
-
-    audit_logs.insert(0, {
-        "action": "تسديد اشتراك", 
-        "card": card_id, 
-        "months": months, 
-        "price": price, 
-        "agent": agent
-    })
-
-    return jsonify({
-        "message": f"تمت عملية التسديد بنجاح لمدة {months} أشهر بمبلغ {price} ريال وتحديث النظام السحابي",
-        "card_number": card_id,
-        "paid_amount": price
-    }), 200
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
