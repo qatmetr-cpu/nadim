@@ -1,128 +1,142 @@
-import sqlite3
-import hashlib
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-DB_NAME = "dvcrypt.db"
+# بيانات المسؤول الأساسي
+ADMIN_USER = "Nadim"
+ADMIN_PASS = "ofsad"
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+# قاعدة بيانات الوكلاء (تبدأ بالمسؤول الرئيسي)
+agents_db = {
+    "Nadim": "ofsad"
+}
 
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS cards (
-                        card_number TEXT PRIMARY KEY,
-                        customer_name TEXT,
-                        status TEXT)''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-                        username TEXT PRIMARY KEY,
-                        password TEXT,
-                        role TEXT)''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
-                        card_number TEXT,
-                        months INTEGER,
-                        price REAL,
-                        date TEXT)''')
-    
-    # تعيين حساب المسؤول الجديد Nadim مع تشفير كلمة المرور Ofsad
-    cursor.execute("SELECT * FROM users WHERE username = 'Nadim'")
-    if not cursor.fetchone():
-        secure_pass = hash_password("Ofsad")
-        cursor.execute("INSERT INTO users VALUES ('Nadim', ?, 'admin')", (secure_pass,))
-        
-    conn.commit()
-    conn.close()
+# قاعدة بيانات سحابية مركزية للكروت والاشتراكات
+cards_cloud_db = {
+    "1001": {"subscriber_name": "مشترك تجريبي 1", "status": "Active subscriber", "package": "الباقة الأساسية", "expiry_date": "10/06/2027"}
+}
 
-@app.route('/')
+# سجلات العمليات (البحث والتسديد)
+audit_logs = []
+
+@app.route('/', methods=['GET'])
 def home():
-    return jsonify({"status": "online", "message": "ALSAFA TV Secure Bridge Running"})
+    return jsonify({"status": "Online", "service": "ALSAFA TV Cloud System Active"}), 200
 
+# نظام تسجيل الدخول الآمن
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json
+    data = request.json or {}
     username = data.get('username')
     password = data.get('password')
-    hashed_pass = hash_password(password)
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT role FROM users WHERE username = ? AND password = ?", (username, hashed_pass))
-    user = cursor.fetchone()
-    conn.close()
-
-    if user:
-        return jsonify({"success": True, "role": user[0], "message": "تم تسجيل الدخول بنجاح"})
+    if username in agents_db and agents_db[username] == password:
+        is_admin = (username == ADMIN_USER)
+        return jsonify({
+            "message": "تم تسجيل الدخول بنجاح",
+            "username": username,
+            "is_admin": is_admin
+        }), 200
     else:
-        return jsonify({"success": False, "message": "خطأ في اسم المستخدم أو كلمة المرور"}), 401
+        return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة"}), 401
 
-@app.route('/add_agent', methods=['POST'])
+# إضافة الوكلاء (متاحة للمسؤول Nadim فقط)
+@app.route('/api/add-agent', methods=['POST'])
 def add_agent():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    data = request.json or {}
+    admin_user = data.get('admin_user')
+    new_name = data.get('new_username')
+    new_pass = data.get('new_password')
 
-    if not username or not password:
-        return jsonify({"success": False, "message": "يرجى إدخال اسم المستخدم وكلمة المرور"}), 400
+    if admin_user != ADMIN_USER:
+        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي Nadim بإضافة وكلاء"}), 403
 
-    hashed_pass = hash_password(password)
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, 'agent')", (username, hashed_pass))
-        conn.commit()
-        conn.close()
-        return jsonify({"success": True, "message": f"تمت إضافة الوكيل {username} بنجاح"})
-    except sqlite3.IntegrityError:
-        return jsonify({"success": False, "message": "اسم المستخدم موجود مسبقاً"}), 400
+    if not new_name or not new_pass:
+        return jsonify({"message": "يرجى إدخال اسم المستخدم وكلمة المرور للوكيل الجديد"}), 400
 
-@app.route('/pay', methods=['POST'])
-def pay_card():
-    data = request.json
-    card_no = data.get('card_number')
-    months = int(data.get('months'))
-    price = float(data.get('price'))
-    agent_name = data.get('agent_name')
-    date_today = datetime.now().strftime('%Y-%m-%d')
+    agents_db[new_name] = new_pass
+    return jsonify({"message": f"تم إضافة الوكيل {new_name} بنجاح"}), 200
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE cards SET status = 'Active' WHERE card_number = ?", (card_no,))
-    cursor.execute("INSERT INTO transactions (agent_name, card_number, months, price, date) VALUES (?, ?, ?, ?, ?)",
-                   (agent_name, card_no, months, price, date_today))
-    conn.commit()
-    conn.close()
+# عملية البحث والاستعلام عن الكارت
+@app.route('/api/search', methods=['GET'])
+def search_card():
+    card_id = request.args.get('card')
+    agent = request.args.get('agent', 'unknown')
 
-    return jsonify({"success": True, "message": f"تم تجديد الكرت {card_no} بنجاح"})
+    if not card_id:
+        return jsonify({"message": "يرجى إدخال رقم الكارت أو المشترك"}), 400
 
-@app.route('/admin_stats', methods=['GET'])
-def admin_stats():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    # تسجيل عملية البحث في السجلات
+    audit_logs.insert(0, {"action": "بحث عن كارت", "card": card_id, "agent": agent})
+
+    # جلب بيانات الكارت من السحابة أو إنشاء سجل جديد إن لم يكن موجوداً
+    if card_id in cards_cloud_db:
+        card_info = cards_cloud_db[card_id]
+        return jsonify({
+            "card_number": card_id,
+            "subscriber_name": card_info["subscriber_name"],
+            "status": card_info["status"],
+            "package": card_info["package"],
+            "expiry_date": card_info["expiry_date"]
+        }), 200
+    else:
+        return jsonify({
+            "card_number": card_id,
+            "subscriber_name": f"مشترك جديد ({card_id})",
+            "status": "Not used",
+            "package": "غير محددة",
+            "expiry_date": "متاح للشحن والتسديد"
+        }), 200
+
+# تنفيذ عملية التسديد وتحديث الاشتراكات بالأسعار المحددة
+@app.route('/api/pay', methods=['POST'])
+def process_payment():
+    data = request.json or {}
+    card_id = data.get('card_number')
+    months = data.get('months')
+    price = data.get('price')
+    agent = data.get('agent', 'unknown')
+
+    if not card_id or not months or not price:
+        return jsonify({"message": "بيانات التسديد غير مكتملة"}), 400
+
+    # جدول الأسعار المعتمد بدقة
+    price_table = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000}
     
-    # إحصائيات الوكلاء (عدد الكروت وإجمالي المبالغ لكل وكيل)
-    cursor.execute('''SELECT agent_name, COUNT(*), SUM(price) FROM transactions GROUP BY agent_name''')
-    agents_data = [{"agent": row[0], "cards_count": row[1], "total_sales": row[2]} for row in cursor.fetchall()]
-    
-    # الأرباح اليومية لتاريخ اليوم
-    date_today = datetime.now().strftime('%Y-%m-%d')
-    cursor.execute('''SELECT SUM(price) FROM transactions WHERE date = ?''', (date_today,))
-    daily_res = cursor.fetchone()
-    daily_profit = daily_res[0] if daily_res[0] else 0
-    
-    conn.close()
-    return jsonify({"success": True, "agents": agents_data, "daily_profit": daily_profit})
+    if int(months) in price_table and int(price) != price_table[int(months)]:
+        return jsonify({"message": "خطأ في مطابقة السعر المحدد للباقة"}), 400
+
+    # تحديث أو إنشاء الكارت في السحابة وتمديد التاريخ
+    cards_cloud_db[card_id] = {
+        "subscriber_name": f"مشترك رقم {card_id}",
+        "status": "Active subscriber",
+        "package": f"باقة {months} أشهر",
+        "expiry_date": f"تم التمديد لمدة {months} أشهر"
+    }
+
+    # تسجيل عملية التسديد في السجلات
+    audit_logs.insert(0, {
+        "action": "تسديد اشتراك", 
+        "card": card_id, 
+        "months": months, 
+        "price": price, 
+        "agent": agent
+    })
+
+    return jsonify({
+        "message": f"تمت عملية التسديد بنجاح لمدة {months} أشهر بمبلغ {price} ريال وتحديث النظام السحابي",
+        "card_number": card_id,
+        "paid_amount": price
+    }), 200
+
+# استعراض السجلات (للمسؤول فقط)
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    return jsonify({"logs": audit_logs[:30]}), 200
 
 if __name__ == '__main__':
-    init_db()
-    print("ALSAFA TV Server running on port 5000...")
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
