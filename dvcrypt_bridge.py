@@ -1,8 +1,8 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 
-app = Flask(__name__, template_folder='.', static_folder='.')
+app = Flask(__name__)
 CORS(app)
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "Nadim")
@@ -18,9 +18,14 @@ audit_logs = []
 @app.route('/', methods=['GET'])
 def home():
     try:
-        return render_template('index.html')
+        # قراءة ملف index.html مباشرة من المجلد الحالي
+        if os.path.exists('index.html'):
+            with open('index.html', 'r', encoding='utf-8') as f:
+                return f.read(), 200
+        else:
+            return "ملف index.html غير موجود في المستودع", 404
     except Exception as e:
-        return jsonify({"status": "متصل بالشبكة", "service": "نظام سحابة تلفزيون الصفا نشط"}), 200
+        return str(e), 500
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -57,4 +62,9 @@ def add_agent():
 @app.route('/api/search', methods=['GET'])
 def search_card():
     card_id = request.args.get('card')
-    agent = request.
+    agent = request.args.get('agent', 'unknown')
+
+    if not card_id:
+        return jsonify({"message": "يرجى إدخال رقم الكارت أو المشترك"}), 400
+
+    audit_logs.insert
