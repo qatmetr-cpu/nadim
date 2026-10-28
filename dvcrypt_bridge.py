@@ -1,32 +1,28 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='.', static_folder='.')
 CORS(app)
 
-# بيانات المسؤول الأساسي
-ADMIN_USER = "Nadim"
-ADMIN_PASS = "ofsad"
+ADMIN_USER = os.environ.get("ADMIN_USER", "Nadim")
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "ofsad")
 
-# قاعدة بيانات الوكلاء (تبدأ بالمسؤول الرئيسي)
 agents_db = {
-    "Nadim": "ofsad"
+    ADMIN_USER: ADMIN_PASS
 }
 
-# قاعدة بيانات سحابية مركزية للكروت والاشتراكات
-cards_cloud_db = {
-    "1001": {"subscriber_name": "مشترك تجريبي 1", "status": "Active subscriber", "package": "الباقة الأساسية", "expiry_date": "10/06/2027"}
-}
-
-# سجلات العمليات (البحث والتسديد)
+cards_cloud_db = {}
 audit_logs = []
 
 @app.route('/', methods=['GET'])
 def home():
-    return jsonify({"status": "Online", "service": "ALSAFA TV Cloud System Active"}), 200
+    # سيقوم هذا السطر بعرض واجهة index.html مباشرة عند فتح الرابط
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        return jsonify({"status": "متصل بالشبكة", "service": "نظام سحابة تلفزيون الصفا نشط"}), 200
 
-# نظام تسجيل الدخول الآمن
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json or {}
@@ -43,7 +39,6 @@ def login():
     else:
         return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة"}), 401
 
-# إضافة الوكلاء (متاحة للمسؤول Nadim فقط)
 @app.route('/api/add-agent', methods=['POST'])
 def add_agent():
     data = request.json or {}
@@ -52,15 +47,14 @@ def add_agent():
     new_pass = data.get('new_password')
 
     if admin_user != ADMIN_USER:
-        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي Nadim بإضافة وكلاء"}), 403
+        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي بإضافة وكلاء"}), 403
 
     if not new_name or not new_pass:
-        return jsonify({"message": "يرجى إدخال اسم المستخدم وكلمة المرور للوكيل الجديد"}), 400
+        return jsonify({"message": "يرجى إدخال بيانات الوكيل الجديد"}), 400
 
     agents_db[new_name] = new_pass
     return jsonify({"message": f"تم إضافة الوكيل {new_name} بنجاح"}), 200
 
-# عملية البحث والاستعلام عن الكارت
 @app.route('/api/search', methods=['GET'])
 def search_card():
     card_id = request.args.get('card')
@@ -69,10 +63,8 @@ def search_card():
     if not card_id:
         return jsonify({"message": "يرجى إدخال رقم الكارت أو المشترك"}), 400
 
-    # تسجيل عملية البحث في السجلات
     audit_logs.insert(0, {"action": "بحث عن كارت", "card": card_id, "agent": agent})
 
-    # جلب بيانات الكارت من السحابة أو إنشاء سجل جديد إن لم يكن موجوداً
     if card_id in cards_cloud_db:
         card_info = cards_cloud_db[card_id]
         return jsonify({
@@ -91,7 +83,6 @@ def search_card():
             "expiry_date": "متاح للشحن والتسديد"
         }), 200
 
-# تنفيذ عملية التسديد وتحديث الاشتراكات بالأسعار المحددة
 @app.route('/api/pay', methods=['POST'])
 def process_payment():
     data = request.json or {}
@@ -103,13 +94,11 @@ def process_payment():
     if not card_id or not months or not price:
         return jsonify({"message": "بيانات التسديد غير مكتملة"}), 400
 
-    # جدول الأسعار المعتمد بدقة
     price_table = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000}
     
     if int(months) in price_table and int(price) != price_table[int(months)]:
         return jsonify({"message": "خطأ في مطابقة السعر المحدد للباقة"}), 400
 
-    # تحديث أو إنشاء الكارت في السحابة وتمديد التاريخ
     cards_cloud_db[card_id] = {
         "subscriber_name": f"مشترك رقم {card_id}",
         "status": "Active subscriber",
@@ -117,7 +106,6 @@ def process_payment():
         "expiry_date": f"تم التمديد لمدة {months} أشهر"
     }
 
-    # تسجيل عملية التسديد في السجلات
     audit_logs.insert(0, {
         "action": "تسديد اشتراك", 
         "card": card_id, 
@@ -132,7 +120,6 @@ def process_payment():
         "paid_amount": price
     }), 200
 
-# استعراض السجلات (للمسؤول فقط)
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     return jsonify({"logs": audit_logs[:30]}), 200
