@@ -1,55 +1,39 @@
-import os
-import socket
+import requests
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# المسار المباشر لملف السجلات داخل مجلد البرنامج
-LOG_FILE_PATH = r"C:\Users\user\DVCrypt\log_2.txt"  # أكتب المسار الصحيح تماماً هنا
+# عنوان جهاز الكمبيوتر الأساسي في محلك عبر شبكة الـ VPN الخاصة (Tailscale)
+LOCAL_PC_DVCrypt_URL = "http://100.87.45.65:8100"
 
 
 @app.route("/api/search", methods=["GET"])
-def search_card():
+def cloud_search():
   card_no = request.args.get("card")
 
   if not card_no:
     return jsonify({"status": "error", "message": "الرجاء إدخال رقم الكارت"}), 400
 
-  formatted_card = card_no.zfill(6)
-  subscriber_name = f"مشترك ({card_no})"
-  state_info = "Not used"
-  package_info = "باقة معتمدة"
-  details_info = "لم يتم العثور على بيانات مطابقة"
-
   try:
-    if os.path.exists(LOG_FILE_PATH):
-      with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        lines = f.readlines()
-        for line in reversed(lines):
-          if card_no in line or formatted_card in line:
-            if "Active" in line or "Activated" in line:
-              state_info = "Active"
-              details_info = "الاشتراك نشط وفعال"
-            elif "ended" in line or "Subscription ended" in line:
-              state_info = "Subscription ended"
-              details_info = "انتهت صلاحية الاشتراك"
-            elif "subscription date changed" in line:
-              state_info = "Active"
-              details_info = "تم تحديث تاريخ الاشتراك بنجاح"
-            break
-    else:
-      details_info = "ملف السجل غير موجود في المسار المحدد"
-  except Exception as e:
-    details_info = f"خطأ في قراءة البيانات: {str(e)}"
+    # السحابة تستعلم مباشرة من جهاز الكمبيوتر في محلك عبر نفق الـ VPN الآمن
+    response = requests.get(
+        f"{LOCAL_PC_DVCrypt_URL}/api/search", params={"card": card_no}, timeout=3
+    )
 
-  return jsonify({
-      "status": "success",
-      "card": card_no,
-      "subscriber_name": subscriber_name,
-      "state": state_info,
-      "package": package_info,
-      "details": details_info,
-  })
+    if response.status_code == 200:
+      return jsonify(response.json())
+    else:
+      return jsonify({
+          "status": "error",
+          "message": "استجابة غير صالحة من برنامج DVCrypt على الكمبيوتر المحلي",
+      }), 500
+
+  except Exception as e:
+    return jsonify({
+        "status": "error",
+        "message": "تعذر الوصول إلى الكمبيوتر الأساسي (تأكد من تشغيل الكمبيوتر والـ VPN)",
+        "details": str(e),
+    }), 500
 
 
 if __name__ == "__main__":
