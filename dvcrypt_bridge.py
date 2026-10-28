@@ -359,9 +359,51 @@ def search_sub():
         },
         {
             "card": "00142",
-            "name": f"قطمير {q} (مشترك مطابق 1)",
+            "name": "قطمير المشترك الأول",
             "address": "فرع السوق",
             "phone": "+967770000000",
         },
         {
-            "card": "00890
+            "card": "00890",
+            "name": "سعيد المشترك الثاني",
+            "address": "فرع الخط العام",
+            "phone": "+967771111111",
+        },
+    ]
+    return jsonify({"status": "success", "results": mock_results})
+
+
+@app.route("/api/save-payment", methods=["POST"])
+def save_payment():
+  data = request.json
+  user = data.get("user")
+  card = data.get("id")
+  price = data.get("price")
+  expiry = data.get("expiry")
+  now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+  login_reports.insert(
+      0,
+      f"[{now}] الوكيل ({user}) سدد الكارت ({card}) بمبلغ {price} ريال - ينتهي في:"
+      f" {expiry}",
+  )
+
+  try:
+    r = requests.post(
+        f"http://100.87.45.65:{data['port']}/api/pay", json=data, timeout=3
+    )
+    return jsonify(r.json())
+  except:
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/get-reports", methods=["GET"])
+def get_reports():
+  logs_data = (
+      login_reports if login_reports else ["لا توجد تقارير مسجلة بعد"]
+  )
+  return jsonify({"logs": logs_data})
+
+
+if __name__ == "__main__":
+  app.run(host="0.0.0.0", port=5000)
