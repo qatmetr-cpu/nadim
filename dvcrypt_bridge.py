@@ -1,12 +1,16 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "Nadim")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "ofsad")
+
+# رابط نفق Cloudflare المربوط بجهازك المحلي
+LOCAL_BRIDGE_URL = os.environ.get("LOCAL_BRIDGE_URL", "https://decent-keith-belts-journalists.trycloudflare.com")
 
 agents_db = {
     ADMIN_USER: ADMIN_PASS
@@ -15,7 +19,6 @@ agents_db = {
 cards_cloud_db = {}
 audit_logs = []
 
-# الواجهة الكاملة والشاملة (تتضمن لوحة الإدارة، الوكلاء، جدول الأسعار، والتسديد)
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -41,7 +44,6 @@ HTML_CONTENT = """
     <div class="container">
         <h2>🌐 نظام إدارة شبكة ALSAFA TV</h2>
         
-        <!-- قسم تسجيل الدخول -->
         <div id="login-section">
             <p>يرجى تسجيل الدخول للبدء</p>
             <input type="text" id="username" placeholder="اسم المستخدم" value="Nadim">
@@ -49,10 +51,8 @@ HTML_CONTENT = """
             <button onclick="login()">دخول للنظام</button>
         </div>
 
-        <!-- لوحة التحكم الرئيسية (مخفية حتى يتم تسجيل الدخول) -->
         <div id="dashboard" style="display:none;">
             <h3 id="welcome-msg" style="color: #38bdf8;"></h3>
-            
             <hr style="border-color: #334155; margin: 20px 0;">
             
             <h4>🔍 الاستعلام عن كارت / مشترك</h4>
@@ -60,7 +60,6 @@ HTML_CONTENT = """
             <button onclick="searchCard()">بحث عن الكارت</button>
             <div id="search-result" class="card-box" style="display:none;"></div>
 
-            <!-- نافذة التسديد والتمديد -->
             <div id="payment-box" style="display:none; margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 8px; text-align: right;">
                 <h4 style="color: #38bdf8; text-align: center;">💳 نافذة تسديد اشتراك</h4>
                 <label>اختر الباقة والمدة:</label>
@@ -75,7 +74,6 @@ HTML_CONTENT = """
                 <button onclick="processPayment()">تنفيذ وتأكيد التسديد</button>
             </div>
 
-            <!-- جدول الأسعار المعتمد -->
             <div style="margin-top: 25px; text-align: right;">
                 <h4 style="color: #cbd5e1;">📋 جدول أسعار باقات نت هوم و ALSAFA TV:</h4>
                 <table class="price-table">
@@ -88,7 +86,6 @@ HTML_CONTENT = """
                 </table>
             </div>
 
-            <!-- لوحة تحكم المسؤول لإضافة الوكلاء -->
             <div id="admin-panel" class="admin-section" style="display:none;">
                 <h4 style="color: #f43f5e;">🛠️ لوحة المسؤول (إدارة الوكلاء)</h4>
                 <input type="text" id="new-agent-name" placeholder="اسم الوكيل الجديد">
@@ -138,7 +135,7 @@ HTML_CONTENT = """
             resBox.innerHTML = `
                 <b>رقم الكارت:</b> ${data.card_number}<br>
                 <b>اسم المشترك:</b> ${data.subscriber_name}<br>
-                <b>الحالة:</b> ${data.status}<br>
+                <b>الحالة:</b> ${data.status || data.status_text}<br>
                 <b>الباقة الحالية:</b> ${data.package}<br>
                 <b>الانتهاء:</b> ${data.expiry_date}
             `;
@@ -232,23 +229,22 @@ def search_card():
 
     audit_logs.insert(0, {"action": "بحث", "card": card_id, "agent": agent})
 
-    if card_id in cards_cloud_db:
-        info = cards_cloud_db[card_id]
-        return jsonify({
-            "card_number": card_id,
-            "subscriber_name": info["subscriber_name"],
-            "status": info["status"],
-            "package": info["package"],
-            "expiry_date": info["expiry_date"]
-        }), 200
-    else:
-        return jsonify({
-            "card_number": card_id,
-            "subscriber_name": f"مشترك جديد ({card_id})",
-            "status": "Not used",
-            "package": "غير محددة",
-            "expiry_date": "متاح للتسديد"
-        }), 200
+    # جلب البيانات الحقيقية مباشرة من جهازك المحلي عبر نفق Cloudflare
+    try:
+        bridge_res = requests.get(f"{LOCAL_BRIDGE_URL}/api/search?card={card_id}", timeout=5)
+        if bridge_res.status_code == 200:
+            return jsonify(bridge_res.json()), 200
+    except Exception as e:
+        print(f"Local bridge connection error: {e}")
+
+    # احتياطي في حال تعذر الاتصال المؤقت
+    return jsonify({
+        "card_number": card_id,
+        "subscriber_name": f"مشترك جديد ({card_id})",
+        "status": "Not used",
+        "package": "غير محددة",
+        "expiry_date": "متاح للتسديد"
+    }), 200
 
 @app.route('/api/pay', methods=['POST'])
 def process_payment():
@@ -256,22 +252,4 @@ def process_payment():
     card_id = data.get('card_number')
     months = data.get('months')
     price = data.get('price')
-    agent = data.get('agent', 'unknown')
-
-    if not card_id or not months or not price:
-        return jsonify({"message": "بيانات غير مكتملة"}), 400
-
-    cards_cloud_db[card_id] = {
-        "subscriber_name": f"مشترك كارت {card_id}",
-        "status": "Active",
-        "package": f"باقة {months} أشهر",
-        "expiry_date": f"تم التمديد بمعرفة الوكيل ({agent})"
-    }
-
-    audit_logs.insert(0, {"action": "تسديد", "card": card_id, "months": months, "price": price, "agent": agent})
-
-    return jsonify({"message": f"تم تسديد مبلغ {price} ريال وتمديد الباقة بنجاح!"}), 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    agent = data.get
