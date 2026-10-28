@@ -1,2 +1,0 @@
-# nadim
-QstHelpers
