@@ -15,43 +15,95 @@ agents_db = {
 cards_cloud_db = {}
 audit_logs = []
 
-# واجهة الموقع مباشرة داخل الكود لتجنب أي مشاكل في مسار الملفات
+# واجهة النظام الشاملة والاحترافية لإدارة شبكة ALSAFA TV
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام إدارة ALSAFA TV</title>
+    <title>نظام إدارة شبكة ALSAFA TV</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background: #121212; color: #fff; margin: 0; padding: 20px; text-align: center; }
-        .container { max-width: 500px; margin: 50px auto; background: #1e1e1e; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: none; font-size: 16px; box-sizing: border-box; }
-        input { background: #2c2c2c; color: #fff; }
-        button { background: #00bcd4; color: #fff; font-weight: bold; cursor: pointer; }
-        button:hover { background: #0097a7; }
-        .status { margin-top: 15px; color: #4caf50; font-weight: bold; }
+        body { font-family: Tahoma, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 15px; text-align: center; }
+        .container { max-width: 600px; margin: 20px auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #334155; font-size: 15px; box-sizing: border-box; background: #0f172a; color: #fff; }
+        button { background: #0ea5e9; color: #fff; font-weight: bold; cursor: pointer; border: none; }
+        button:hover { background: #0284c7; }
+        .card-box { background: #334155; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: right; }
+        .price-table { width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 14px; }
+        .price-table th, .price-table td { border: 1px solid #475569; padding: 8px; text-align: center; }
+        .price-table th { background: #0f172a; }
+        .status { margin-top: 15px; color: #22c55e; font-weight: bold; font-size: 14px; }
+        .admin-section { background: #1e293b; border: 1px dashed #0ea5e9; padding: 15px; margin-top: 20px; border-radius: 8px; text-align: right; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>نظام إدارة ALSAFA TV السحابي</h2>
+        <h2>🌐 نظام إدارة شبكة ALSAFA TV</h2>
+        
+        <!-- قسم تسجيل الدخول -->
         <div id="login-section">
+            <p>يرجى تسجيل الدخول للبدء</p>
             <input type="text" id="username" placeholder="اسم المستخدم">
             <input type="password" id="password" placeholder="كلمة المرور">
-            <button onclick="login()">تسجيل الدخول</button>
+            <button onclick="login()">دخول للنظام</button>
         </div>
+
+        <!-- لوحة التحكم الرئيسية -->
         <div id="dashboard" style="display:none;">
-            <h3 id="welcome-msg"></h3>
+            <h3 id="welcome-msg" style="color: #38bdf8;"></h3>
+            
+            <hr style="border-color: #334155; margin: 20px 0;">
+            
+            <h4>🔍 الاستعلام عن كارت / مشترك</h4>
             <input type="text" id="card-id" placeholder="أدخل رقم الكارت أو المشترك">
             <button onclick="searchCard()">بحث عن الكارت</button>
-            <div id="result" style="margin-top:20px; text-align:right; background:#2c2c2c; padding:15px; border-radius:6px;"></div>
+            <div id="search-result" class="card-box" style="display:none;"></div>
+
+            <!-- قسم التسديد والتمديد -->
+            <div id="payment-box" style="display:none; margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 8px; text-align: right;">
+                <h4 style="color: #38bdf8; text-align: center;">💳 نافذة تسديد اشتراك</h4>
+                <label>اختر الباقة والمدة:</label>
+                <select id="pay-months" onchange="updatePrice()">
+                    <option value="2">باقة شهرين - 3000 ريال</option>
+                    <option value="3">باقة 3 أشهر - 4500 ريال</option>
+                    <option value="4">باقة 4 أشهر - 6000 ريال</option>
+                    <option value="6">باقة 6 أشهر - 8000 ريال</option>
+                    <option value="12">باقة سنة (12 شهر) - 15000 ريال</option>
+                </select>
+                <input type="number" id="pay-price" value="3000" placeholder="المبلغ المطلوب">
+                <button onclick="processPayment()">تنفيذ وتأكيد التسديد</button>
+            </div>
+
+            <!-- جدول الأسعار المعتمد -->
+            <div style="margin-top: 25px; text-align: right;">
+                <h4 style="color: #cbd5e1;">📋 جدول أسعار باقات نت هوم و ALSAFA TV:</h4>
+                <table class="price-table">
+                    <tr><th>المدة</th><th>السعر الرسمي</th></tr>
+                    <tr><td>شهرين</td><td>3000 ريال</td></tr>
+                    <tr><td>3 أشهر</td><td>4500 ريال</td></tr>
+                    <tr><td>4 أشهر</td><td>6000 ريال</td></tr>
+                    <tr><td>6 أشهر</td><td>8000 ريال</td></tr>
+                    <tr><td>سنة كاملة</td><td>15000 ريال</td></tr>
+                </table>
+            </div>
+
+            <!-- لوحة تحكم المسؤول لإضافة الوكلاء -->
+            <div id="admin-panel" class="admin-section" style="display:none;">
+                <h4 style="color: #f43f5e;">🛠️ لوحة المسؤول (إدارة الوكلاء)</h4>
+                <input type="text" id="new-agent-name" placeholder="اسم الوكيل الجديد">
+                <input type="password" id="new-agent-pass" placeholder="كلمة مرور الوكيل الجديد">
+                <button onclick="addAgent()" style="background: #f43f5e;">إضافة وكيل جديد</button>
+            </div>
         </div>
-        <p class="status">السيرفر متصل بنجاح 🟢</p>
+
+        <p class="status">السيرفر السحابي متصل بنجاح 🟢</p>
     </div>
 
     <script>
         let currentUser = "";
+        let isAdmin = false;
+
         async function login() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
@@ -63,9 +115,13 @@ HTML_CONTENT = """
             const data = await res.json();
             if(res.ok) {
                 currentUser = u;
+                isAdmin = data.is_admin;
                 document.getElementById('login-section').style.display = 'none';
                 document.getElementById('dashboard').style.display = 'block';
-                document.getElementById('welcome-msg').innerText = "مرحباً بك، " + u;
+                document.getElementById('welcome-msg').innerText = "مرحباً بك: " + u;
+                if(isAdmin) {
+                    document.getElementById('admin-panel').style.display = 'block';
+                }
             } else {
                 alert(data.message);
             }
@@ -76,12 +132,54 @@ HTML_CONTENT = """
             if(!card) return alert('يرجى إدخال رقم الكارت');
             const res = await fetch(`/api/search?card=${card}&agent=${currentUser}`);
             const data = await res.json();
-            document.getElementById('result').innerHTML = `
+            
+            const resBox = document.getElementById('search-result');
+            resBox.style.display = 'block';
+            resBox.innerHTML = `
+                <b>رقم الكارت:</b> ${data.card_number}<br>
                 <b>اسم المشترك:</b> ${data.subscriber_name}<br>
                 <b>الحالة:</b> ${data.status}<br>
-                <b>الباقة:</b> ${data.package}<br>
-                <b>تاريخ الانتهاء:</b> ${data.expiry_date}
+                <b>الباقة الحالية:</b> ${data.package}<br>
+                <b>الانتهاء:</b> ${data.expiry_date}
             `;
+            document.getElementById('payment-box').style.display = 'block';
+        }
+
+        function updatePrice() {
+            const months = document.getElementById('pay-months').value;
+            const prices = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000};
+            document.getElementById('pay-price').value = prices[months];
+        }
+
+        async function processPayment() {
+            const card = document.getElementById('card-id').value;
+            const months = document.getElementById('pay-months').value;
+            const price = document.getElementById('pay-price').value;
+
+            const res = await fetch('/api/pay', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({card_number: card, months: months, price: price, agent: currentUser})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(res.ok) searchCard();
+        }
+
+        async function addAgent() {
+            const name = document.getElementById('new-agent-name').value;
+            const pass = document.getElementById('new-agent-pass').value;
+            const res = await fetch('/api/add-agent', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({admin_user: currentUser, new_username: name, new_password: pass})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(res.ok) {
+                document.getElementById('new-agent-name').value = '';
+                document.getElementById('new-agent-pass').value = '';
+            }
         }
     </script>
 </body>
@@ -108,24 +206,40 @@ def login():
     else:
         return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة"}), 401
 
+@app.route('/api/add-agent', methods=['POST'])
+def add_agent():
+    data = request.json or {}
+    admin_user = data.get('admin_user')
+    new_name = data.get('new_username')
+    new_pass = data.get('new_password')
+
+    if admin_user != ADMIN_USER:
+        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي"}), 403
+
+    if not new_name or not new_pass:
+        return jsonify({"message": "يرجى إدخال البيانات كاملة"}), 400
+
+    agents_db[new_name] = new_pass
+    return jsonify({"message": f"تم إضافة الوكيل {new_name} بنجاح"}), 200
+
 @app.route('/api/search', methods=['GET'])
 def search_card():
     card_id = request.args.get('card')
     agent = request.args.get('agent', 'unknown')
 
     if not card_id:
-        return jsonify({"message": "يرجى إدخال رقم الكارت أو المشترك"}), 400
+        return jsonify({"message": "أدخل رقم الكارت"}), 400
 
-    audit_logs.insert(0, {"action": "بحث عن كارت", "card": card_id, "agent": agent})
+    audit_logs.insert(0, {"action": "بحث", "card": card_id, "agent": agent})
 
     if card_id in cards_cloud_db:
-        card_info = cards_cloud_db[card_id]
+        info = cards_cloud_db[card_id]
         return jsonify({
             "card_number": card_id,
-            "subscriber_name": card_info["subscriber_name"],
-            "status": card_info["status"],
-            "package": card_info["package"],
-            "expiry_date": card_info["expiry_date"]
+            "subscriber_name": info["subscriber_name"],
+            "status": info["status"],
+            "package": info["package"],
+            "expiry_date": info["expiry_date"]
         }), 200
     else:
         return jsonify({
@@ -133,13 +247,7 @@ def search_card():
             "subscriber_name": f"مشترك جديد ({card_id})",
             "status": "Not used",
             "package": "غير محددة",
-            "expiry_date": "متاح للشحن والتسديد"
+            "expiry_date": "متاح للتسديد"
         }), 200
 
-@app.route('/api/logs', methods=['GET'])
-def get_logs():
-    return jsonify({"logs": audit_logs[:30]}), 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+@app.route
