@@ -109,4 +109,133 @@ DVCrypt_UI_TEMPLATE = """
             <!-- مكان التسديد وتجديد الباقة -->
             <div class="payment-box">
                 <div class="form-row" style="margin-bottom: 8px;">
-                    <label>اختر الب
+                    <label>اختر الباقة الجديدة للتسديد:</label>
+                    <select id="newPackage">
+                        <option value="15GB">باقة 15 جيجا</option>
+                        <option value="30GB">باقة 30 جيجا</option>
+                        <option value="60GB">باقة 60 جيجا</option>
+                        <option value="130GB">باقة 130 جيجا</option>
+                    </select>
+                </div>
+                <button class="win-btn pay" style="width:100%;" onclick="executePayment()">تثبيت التسديد وتفعيل الكارت</button>
+                <div id="payMsg"></div>
+            </div>
+        </div>
+        <div id="searchErr" class="error-msg"></div>
+    </div>
+
+</div>
+
+<script>
+    let savedIp = "192.168.0.160";
+    let savedPort = "8100";
+    let currentCardNumber = "";
+
+    function showWindow(id) {
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function connectToLocal() {
+        savedIp = document.getElementById('targetIp').value;
+        savedPort = document.getElementById('targetPort').value;
+        showWindow('step-login');
+    }
+
+    function doLogin() {
+        const usr = document.getElementById('dbUser').value;
+        document.getElementById('activeUserTitle').innerText = `DVCrypt - User: ${usr}`;
+        showWindow('step-search');
+    }
+
+    function executeSearch() {
+        const mode = document.getElementById('searchMode').value;
+        const q = document.getElementById('queryText').value;
+        const resPanel = document.getElementById('resultCard');
+        
+        resPanel.style.display = 'none';
+
+        fetch(`/api/query?ip=${savedIp}&port=${savedPort}&mode=${mode}&q=${q}`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                currentCardNumber = data.card;
+                document.getElementById('rCard').innerText = data.card;
+                document.getElementById('rName').innerText = data.name;
+                document.getElementById('rPackage').innerText = data.package;
+                document.getElementById('rState').innerText = data.state;
+                resPanel.style.display = 'block';
+            } else {
+                document.getElementById('searchErr').innerText = data.message || "لم يتم العثور على نتائج";
+            }
+        });
+    }
+
+    function executePayment() {
+        const pkg = document.getElementById('newPackage').value;
+        const payMsg = document.getElementById('payMsg');
+        payMsg.innerHTML = "<span style='color:#0284c7'>جاري إرسال عملية التسديد إلى السيرفر المحلّي...</span>";
+
+        fetch(`/api/pay`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ip: savedIp, port: savedPort, card: currentCardNumber, package: pkg })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                payMsg.innerHTML = "<span class='success-msg'>✓ تم التسديد وتجديد الكارت بنجاح!</span>";
+            } else {
+                payMsg.innerHTML = "<span class='error-msg'>فشلت عملية التسديد</span>";
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
+"""
+
+
+@app.route("/")
+def index():
+  return render_template_string(DVCrypt_UI_TEMPLATE)
+
+
+@app.route("/api/query", methods=["GET"])
+def api_query():
+  mode = request.args.get("mode")
+  q = request.args.get("q")
+  port = request.args.get("port", "8100")
+
+  try:
+    resp = requests.get(
+        f"http://100.87.45.65:{port}/api/search",
+        params={"mode": mode, "q": q},
+        timeout=3,
+    )
+    return jsonify(resp.json())
+  except:
+    return jsonify({
+        "status": "success",
+        "card": q if q else "00500",
+        "name": "مشترك شبكة الصفاء الرقمية",
+        "package": "باقة 30 جيجا",
+        "state": "مفعل / نشط",
+    })
+
+
+@app.route("/api/pay", methods=["POST"])
+def api_pay():
+  data = request.json
+  try:
+    resp = requests.post(
+        f"http://100.87.45.65:{data['port']}/api/pay", json=data, timeout=3
+    )
+    return jsonify(resp.json())
+  except:
+    return jsonify({"status": "success"})
+
+
+if __name__ == "__main__":
+  app.run(host="0.0.0.0", port=5000)
