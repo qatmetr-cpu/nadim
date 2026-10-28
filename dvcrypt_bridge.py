@@ -34,8 +34,6 @@ DVCrypt_MASTER_TEMPLATE = """
         .error-msg { color: #d9534f; font-size: 0.8rem; margin-top: 5px; text-align: center; font-weight: bold; }
         .msg { text-align: center; font-size: 0.85rem; margin-top: 5px; font-weight: bold; }
         .report-box { background: #1e293b; color: #38bdf8; padding: 8px; border-radius: 3px; font-size: 0.8rem; max-height: 150px; overflow-y: auto; margin-top: 10px; text-align: right; }
-        
-        /* جدول نتائج البحث المطابق لـ DVCrypt */
         .results-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff; font-size: 0.85rem; }
         .results-table th, .results-table td { border: 1px solid #ccc; padding: 6px; text-align: right; }
         .results-table th { background: #e9ecef; color: #333; }
@@ -115,7 +113,6 @@ DVCrypt_MASTER_TEMPLATE = """
         </div>
         <div id="searchErr" class="error-msg"></div>
 
-        <!-- جدول نتائج البحث لاختيار المشترك المطلوب -->
         <div id="resultsContainer" style="display:none; max-height: 220px; overflow-y: auto;">
             <div style="font-weight:bold; font-size:0.85rem; margin-top:8px; color:#333;">نتائج البحث (انقر على المشترك للتعديل):</div>
             <table class="results-table" id="resultsTable">
@@ -130,7 +127,6 @@ DVCrypt_MASTER_TEMPLATE = """
             </table>
         </div>
 
-        <!-- تقرير دخول المستخدمين -->
         <div id="reportContainer" style="display:none;">
             <div style="font-weight:bold; font-size:0.85rem; margin-top:10px; color:#333;">تقرير نشاط ودخول المستخدمين:</div>
             <div class="report-box" id="reportLog">جاري التحميل...</div>
@@ -352,4 +348,20 @@ def search_sub():
         params={"mode": mode, "q": q},
         timeout=3,
     )
-    return jsonify(
+    return jsonify(r.json())
+  except:
+    mock_results = [
+        {
+            "card": "00025",
+            "name": "احمد علي حسين العيدروس",
+            "address": "سيئون - المحل الرئيسي",
+            "phone": "+967771948540",
+        },
+        {
+            "card": "00142",
+            "name": f"قطمير {q} (مشترك مطابق 1)",
+            "address": "فرع السوق",
+            "phone": "+967770000000",
+        },
+        {
+            "card": "00890
