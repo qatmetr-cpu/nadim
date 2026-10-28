@@ -18,7 +18,6 @@ audit_logs = []
 @app.route('/', methods=['GET'])
 def home():
     try:
-        # قراءة ملف index.html مباشرة من المجلد الحالي
         if os.path.exists('index.html'):
             with open('index.html', 'r', encoding='utf-8') as f:
                 return f.read(), 200
@@ -67,4 +66,67 @@ def search_card():
     if not card_id:
         return jsonify({"message": "يرجى إدخال رقم الكارت أو المشترك"}), 400
 
-    audit_logs.insert
+    audit_logs.insert(0, {"action": "بحث عن كارت", "card": card_id, "agent": agent})
+
+    if card_id in cards_cloud_db:
+        card_info = cards_cloud_db[card_id]
+        return jsonify({
+            "card_number": card_id,
+            "subscriber_name": card_info["subscriber_name"],
+            "status": card_info["status"],
+            "package": card_info["package"],
+            "expiry_date": card_info["expiry_date"]
+        }), 200
+    else:
+        return jsonify({
+            "card_number": card_id,
+            "subscriber_name": f"مشترك جديد ({card_id})",
+            "status": "Not used",
+            "package": "غير محددة",
+            "expiry_date": "متاح للشحن والتسديد"
+        }), 200
+
+@app.route('/api/pay', methods=['POST'])
+def process_payment():
+    data = request.json or {}
+    card_id = data.get('card_number')
+    months = data.get('months')
+    price = data.get('price')
+    agent = data.get('agent', 'unknown')
+
+    if not card_id or not months or not price:
+        return jsonify({"message": "بيانات التسديد غير مكتملة"}), 400
+
+    price_table = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000}
+    
+    if int(months) in price_table and int(price) != price_table[int(months)]:
+        return jsonify({"message": "خطأ في مطابقة السعر المحدد للباقة"}), 400
+
+    cards_cloud_db[card_id] = {
+        "subscriber_name": f"مشترك رقم {card_id}",
+        "status": "Active subscriber",
+        "package": f"باقة {months} أشهر",
+        "expiry_date": f"تم التمديد لمدة {months} أشهر"
+    }
+
+    audit_logs.insert(0, {
+        "action": "تسديد اشتراك", 
+        "card": card_id, 
+        "months": months, 
+        "price": price, 
+        "agent": agent
+    })
+
+    return jsonify({
+        "message": f"تمت عملية التسديد بنجاح لمدة {months} أشهر بمبلغ {price} ريال وتحديث النظام السحابي",
+        "card_number": card_id,
+        "paid_amount": price
+    }), 200
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    return jsonify({"logs": audit_logs[:30]}), 200
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
