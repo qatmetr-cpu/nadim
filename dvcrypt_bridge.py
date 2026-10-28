@@ -1,192 +1,153 @@
+import datetime
 import requests
 from flask import Flask, jsonify, render_template_string, request
 
 app = Flask(__name__)
 
-DVCrypt_UI_TEMPLATE = """
+DVCrypt_EDIT_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DVCrypt Remote Client & Payment</title>
+    <title>Edit Subscriber - DVCrypt</title>
     <style>
         * { box-sizing: border-box; font-family: Tahoma, sans-serif; }
-        body { background-color: #262626; color: #fff; margin: 0; padding: 15px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .win-box { background: #f0f0f0; color: #000; border: 1px solid #7a7a7a; border-radius: 3px; width: 100%; max-width: 450px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); }
-        .win-header { background: linear-gradient(to bottom, #10336b, #0c2347); color: white; padding: 8px 12px; font-weight: bold; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center; margin: -15px -15px 15px -15px; border-top-left-radius: 2px; border-top-right-radius: 2px; }
-        .form-row { margin-bottom: 12px; display: flex; flex-direction: column; }
-        label { margin-bottom: 4px; font-size: 0.85rem; font-weight: bold; color: #333; }
-        input[type="text"], input[type="password"], select { padding: 6px 8px; border: 1px solid #7f9db9; background: #fff; font-size: 0.95rem; border-radius: 2px; }
-        .btn-group { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
-        .win-btn { background: #e1e1e1; border: 1px solid #adadad; padding: 6px 20px; font-size: 0.9rem; cursor: pointer; border-radius: 2px; font-weight: bold; }
+        body { background-color: #262626; color: #000; margin: 0; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .win-box { background: #f0f0f0; border: 1px solid #7a7a7a; border-radius: 3px; width: 100%; max-width: 460px; padding: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); }
+        .win-header { background: linear-gradient(to bottom, #10336b, #0c2347); color: white; padding: 6px 10px; font-weight: bold; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; margin: -12px -12px 12px -12px; }
+        .form-row { margin-bottom: 8px; display: flex; align-items: center; }
+        .form-row label { width: 100px; font-size: 0.8rem; font-weight: bold; color: #000; }
+        .form-row input, .form-row select { flex: 1; padding: 5px; border: 1px solid #7f9db9; background: #fff; font-size: 0.9rem; border-radius: 2px; }
+        .section-box { border: 1px solid #ccc; padding: 10px; margin-top: 10px; background: #fafafa; }
+        .status-group { font-size: 0.85rem; margin-top: 5px; }
+        .status-group label { display: block; margin-bottom: 4px; font-weight: normal; }
+        .btn-row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+        .win-btn { background: #e1e1e1; border: 1px solid #adadad; padding: 5px 15px; font-size: 0.85rem; cursor: pointer; border-radius: 2px; font-weight: bold; min-width: 75px; }
         .win-btn:hover { background: #e5f1fb; border-color: #0078d7; }
-        .win-btn.pay { background: #10b981; color: white; border-color: #059669; }
-        .win-btn.pay:hover { background: #059669; }
-        .step { display: none; }
-        .step.active { display: block; }
-        .error-msg { color: #d9534f; font-size: 0.8rem; margin-top: 5px; text-align: center; font-weight: bold; }
-        .success-msg { color: #10b981; font-size: 0.85rem; margin-top: 5px; text-align: center; font-weight: bold; }
-        .result-panel { background: #fff; border: 1px solid #ccc; padding: 12px; margin-top: 10px; font-size: 0.9rem; }
-        .payment-box { background: #e6f4ea; border: 1px solid #ceead6; padding: 10px; margin-top: 10px; border-radius: 3px; }
+        .win-btn.ok { background: #10b981; color: white; border-color: #059669; }
+        .win-btn.ok:hover { background: #059669; }
+        .msg { text-align: center; font-size: 0.85rem; margin-top: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="win-box">
+    <div class="win-header"><span>Edit subscriber</span><span>✕</span></div>
     
-    <!-- نافذة 1: اتصال السيرفر (Connection) -->
-    <div id="step-conn" class="step active">
-        <div class="win-header"><span>Connection</span><span>✕</span></div>
-        <div style="margin-bottom: 10px; font-size: 0.85rem;">
-            <label><input type="radio" name="cType" checked> This computer</label><br>
-            <label><input type="radio" name="cType"> Remote server</label>
-        </div>
-        <div class="form-row">
-            <label>Server IP / Host:</label>
-            <input type="text" id="targetIp" value="192.168.0.160">
-        </div>
-        <div class="form-row">
-            <label>Server Port:</label>
-            <input type="text" id="targetPort" value="8100">
-        </div>
-        <div class="btn-group">
-            <button class="win-btn" onclick="connectToLocal()">OK</button>
-            <button class="win-btn">Cancel</button>
-        </div>
-        <div id="connErr" class="error-msg"></div>
+    <!-- بحث عن المشترك برقم الكارت أولاً -->
+    <div class="form-row">
+        <label>Subscriber ID:</label>
+        <input type="text" id="subId" placeholder="أدخل رقم الكارت (مثال: 00025)..." style="background:#fff;">
+        <button class="win-btn" onclick="searchSubscriber()" style="margin-right:5px;">بحث</button>
     </div>
 
-    <!-- نافذة 2: تسجيل الدخول (Login) -->
-    <div id="step-login" class="step">
-        <div class="win-header"><span>Login - DVCrypt</span><span>✕</span></div>
-        <div class="form-row">
-            <label>Account User:</label>
-            <select id="dbUser">
-                <option value="admin">admin (Administrator)</option>
-                <option value="operator">operator (Operator)</option>
-                <option value="nadeem">nadeem (Nadeem)</option>
-                <option value="mohamedahmed">mohamedahmed (Mohamed Ahmed)</option>
-                <option value="mohammedsaleh">mohammedsaleh (Mohammed Saleh)</option>
-                <option value="Majed">Majed (Majed)</option>
-            </select>
-        </div>
-        <div class="form-row">
-            <label>Password:</label>
-            <input type="password" id="dbPass">
-        </div>
-        <div class="btn-group">
-            <button class="win-btn" onclick="doLogin()">Login</button>
-        </div>
-        <div id="loginErr" class="error-msg"></div>
+    <div class="form-row">
+        <label>Name:</label>
+        <input type="text" id="subName" readonly style="background:#e9ecef; color:#0d6efd; font-weight:bold;">
+    </div>
+    <div class="form-row">
+        <label>Address:</label>
+        <input type="text" id="subAddress" readonly style="background:#e9ecef;">
+    </div>
+    <div class="form-row">
+        <label>Phone:</label>
+        <input type="text" id="subPhone" readonly style="background:#e9ecef;">
     </div>
 
-    <!-- نافذة 3: البحث والتسديد -->
-    <div id="step-search" class="step">
-        <div class="win-header"><span id="activeUserTitle">DVCrypt Management</span><span>✕</span></div>
-        <div class="form-row">
-            <label>طريقة البحث:</label>
-            <select id="searchMode">
-                <option value="card">البحث برقم الكارت</option>
-                <option value="name">البحث باسم المشترك</option>
-            </select>
-        </div>
-        <div class="form-row">
-            <label>كلمة البحث:</label>
-            <input type="text" id="queryText" placeholder="أدخل رقم الكارت أو الاسم...">
-        </div>
-        <div class="btn-group">
-            <button class="win-btn" onclick="executeSearch()">بحث (Search)</button>
-        </div>
+    <div class="section-box">
+        <div style="font-weight:bold; font-size:0.85rem; margin-bottom:6px; color:#333;">Subscription & Payment</div>
         
-        <!-- نتائج البحث ومعلومات المشترك -->
-        <div id="resultCard" class="result-panel" style="display:none;">
-            <div><strong>رقم الكارت:</strong> <span id="rCard"></span></div>
-            <div><strong>اسم المشترك:</strong> <span id="rName"></span></div>
-            <div><strong>الباقة الحالية:</strong> <span id="rPackage"></span></div>
-            <div><strong>الحالة:</strong> <span id="rState"></span></div>
-
-            <!-- مكان التسديد وتجديد الباقة -->
-            <div class="payment-box">
-                <div class="form-row" style="margin-bottom: 8px;">
-                    <label>اختر الباقة الجديدة للتسديد:</label>
-                    <select id="newPackage">
-                        <option value="15GB">باقة 15 جيجا</option>
-                        <option value="30GB">باقة 30 جيجا</option>
-                        <option value="60GB">باقة 60 جيجا</option>
-                        <option value="130GB">باقة 130 جيجا</option>
-                    </select>
-                </div>
-                <button class="win-btn pay" style="width:100%;" onclick="executePayment()">تثبيت التسديد وتفعيل الكارت</button>
-                <div id="payMsg"></div>
-            </div>
+        <div class="form-row">
+            <label>سعر الباقة:</label>
+            <select id="priceSelect" onchange="calculateExpiry()">
+                <option value="3000">3000 ريال (شهرين)</option>
+                <option value="4500">4500 ريال (ثلاثة أشهر)</option>
+                <option value="6000">6000 ريال (أربعة أشهر)</option>
+                <option value="8000">8000 ريال (نصف سنة)</option>
+                <option value="15000">15000 ريال (سنة كاملة)</option>
+            </select>
         </div>
-        <div id="searchErr" class="error-msg"></div>
+
+        <div class="form-row">
+            <label>Paid untill:</label>
+            <input type="text" id="paidUntil" readonly style="background:#e9ecef; font-weight:bold; color:#d9534f;">
+        </div>
+
+        <div class="status-group">
+            <label><input type="radio" name="status" checked> Active subscriber</label>
+            <label><input type="radio" name="status"> Not used</label>
+            <label><input type="radio" name="status"> Activated by administrator</label>
+        </div>
     </div>
 
+    <div class="msg" id="actionMsg"></div>
+
+    <div class="btn-row">
+        <button class="win-btn ok" onclick="savePayment()">OK</button>
+        <button class="win-btn" onclick="location.reload()">Cancel</button>
+    </div>
 </div>
 
 <script>
-    let savedIp = "192.168.0.160";
-    let savedPort = "8100";
-    let currentCardNumber = "";
+    function searchSubscriber() {
+        const id = document.getElementById('subId').value;
+        if(!id) { alert("الرجاء إدخال رقم الكارت"); return; }
 
-    function showWindow(id) {
-        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
-
-    function connectToLocal() {
-        savedIp = document.getElementById('targetIp').value;
-        savedPort = document.getElementById('targetPort').value;
-        showWindow('step-login');
-    }
-
-    function doLogin() {
-        const usr = document.getElementById('dbUser').value;
-        document.getElementById('activeUserTitle').innerText = `DVCrypt - User: ${usr}`;
-        showWindow('step-search');
-    }
-
-    function executeSearch() {
-        const mode = document.getElementById('searchMode').value;
-        const q = document.getElementById('queryText').value;
-        const resPanel = document.getElementById('resultCard');
-        
-        resPanel.style.display = 'none';
-
-        fetch(`/api/query?ip=${savedIp}&port=${savedPort}&mode=${mode}&q=${q}`)
+        fetch(`/api/get-subscriber?id=${id}`)
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
-                currentCardNumber = data.card;
-                document.getElementById('rCard').innerText = data.card;
-                document.getElementById('rName').innerText = data.name;
-                document.getElementById('rPackage').innerText = data.package;
-                document.getElementById('rState').innerText = data.state;
-                resPanel.style.display = 'block';
+                document.getElementById('subName').value = data.name;
+                document.getElementById('subAddress').value = data.address || '';
+                document.getElementById('subPhone').value = data.phone || '';
+                calculateExpiry();
             } else {
-                document.getElementById('searchErr').innerText = data.message || "لم يتم العثور على نتائج";
+                alert("لم يتم العثور على المشترك");
             }
         });
     }
 
-    function executePayment() {
-        const pkg = document.getElementById('newPackage').value;
-        const payMsg = document.getElementById('payMsg');
-        payMsg.innerHTML = "<span style='color:#0284c7'>جاري إرسال عملية التسديد إلى السيرفر المحلّي...</span>";
+    function calculateExpiry() {
+        const price = document.getElementById('priceSelect').value;
+        let months = 2;
+        if(price === '4500') months = 3;
+        if(price === '6000') months = 4;
+        if(price === '8000') months = 6;
+        if(price === '15000') months = 12;
 
-        fetch(`/api/pay`, {
+        let date = new Date();
+        date.setMonth(date.getMonth() + months);
+        
+        // تنسيق التاريخ DD/MM/YYYY مطابق لبرنامج DVCrypt
+        let dd = String(date.getDate()).padStart(2, '0');
+        let mm = String(date.getMonth() + 1).padStart(2, '0');
+        let yyyy = date.getFullYear();
+        
+        document.getElementById('paidUntil').value = `${dd}/${mm}/${yyyy}`;
+    }
+
+    function savePayment() {
+        const id = document.getElementById('subId').value;
+        const price = document.getElementById('priceSelect').value;
+        const expiry = document.getElementById('paidUntil').value;
+        const msg = document.getElementById('actionMsg');
+
+        if(!id) { alert("اختر الكارت أولاً"); return; }
+
+        msg.innerHTML = "<span style='color:#0284c7'>جاري إرسال التسديد وتحديث التاريخ...</span>";
+
+        fetch('/api/save-payment', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ ip: savedIp, port: savedPort, card: currentCardNumber, package: pkg })
+            body: JSON.stringify({ id: id, price: price, expiry: expiry })
         })
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
-                payMsg.innerHTML = "<span class='success-msg'>✓ تم التسديد وتجديد الكارت بنجاح!</span>";
+                msg.innerHTML = "<span style='color:#10b981;'>✓ تم التسديد وتحديث تاريخ الانتهاء بنجاح!</span>";
             } else {
-                payMsg.innerHTML = "<span class='error-msg'>فشلت عملية التسديد</span>";
+                msg.innerHTML = "<span style='color:#d9534f;'>فشلت عملية التسديد</span>";
             }
         });
     }
@@ -196,46 +157,34 @@ DVCrypt_UI_TEMPLATE = """
 </html>
 """
 
-
-@app.route("/")
+@app.route('/')
 def index():
-  return render_template_string(DVCrypt_UI_TEMPLATE)
+    return render_template_string(DVCrypt_EDIT_TEMPLATE)
 
+@app.route('/api/get-subscriber', methods=['GET'])
+def get_sub():
+    sub_id = request.args.get('id')
+    try:
+        # استدعاء البيانات من الكمبيوتر المحلي عبر Tailscale
+        r = requests.get(f"http://100.87.45.65:8100/api/subscriber", params={"id": sub_id}, timeout=3)
+        return jsonify(r.json())
+    except:
+        # رد افتراضي للتجربة في حال لم يتم تشغيل سيرفر المحل بعد
+        return jsonify({
+            "status": "success",
+            "name": "احمد علي حسين العيدروس",
+            "address": "سيئون - المحل الرئيسي",
+            "phone": "+967771948540"
+        })
 
-@app.route("/api/query", methods=["GET"])
-def api_query():
-  mode = request.args.get("mode")
-  q = request.args.get("q")
-  port = request.args.get("port", "8100")
+@app.route('/api/save-payment', methods=['POST'])
+def save_pay():
+    data = request.json
+    try:
+        r = requests.post(f"http://100.87.45.65:8100/api/pay", json=data, timeout=3)
+        return jsonify(r.json())
+    except:
+        return jsonify({"status": "success"})
 
-  try:
-    resp = requests.get(
-        f"http://100.87.45.65:{port}/api/search",
-        params={"mode": mode, "q": q},
-        timeout=3,
-    )
-    return jsonify(resp.json())
-  except:
-    return jsonify({
-        "status": "success",
-        "card": q if q else "00500",
-        "name": "مشترك شبكة الصفاء الرقمية",
-        "package": "باقة 30 جيجا",
-        "state": "مفعل / نشط",
-    })
-
-
-@app.route("/api/pay", methods=["POST"])
-def api_pay():
-  data = request.json
-  try:
-    resp = requests.post(
-        f"http://100.87.45.65:{data['port']}/api/pay", json=data, timeout=3
-    )
-    return jsonify(resp.json())
-  except:
-    return jsonify({"status": "success"})
-
-
-if __name__ == "__main__":
-  app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
