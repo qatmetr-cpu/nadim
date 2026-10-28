@@ -1,277 +1,56 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import os
-import requests
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
-CORS(app)
 
-ADMIN_USER = os.environ.get("ADMIN_USER", "Nadim")
-ADMIN_PASS = os.environ.get("ADMIN_PASS", "ofsad")
+# مسار ملف السجل أو قاعدة البيانات التي تستخرج منها بيانات المشتركين
+LOG_FILE_PATH = "log_2.txt"
 
-# رابط نفق Cloudflare المربوط بجهازك المحلي
-LOCAL_BRIDGE_URL = os.environ.get("LOCAL_BRIDGE_URL", "https://decent-keith-belts-journalists.trycloudflare.com")
 
-agents_db = {
-    ADMIN_USER: ADMIN_PASS
-}
-
-cards_cloud_db = {}
-audit_logs = []
-
-HTML_CONTENT = """
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام إدارة شبكة ALSAFA TV</title>
-    <style>
-        body { font-family: Tahoma, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 15px; text-align: center; }
-        .container { max-width: 600px; margin: 20px auto; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #334155; font-size: 15px; box-sizing: border-box; background: #0f172a; color: #fff; }
-        button { background: #0ea5e9; color: #fff; font-weight: bold; cursor: pointer; border: none; }
-        button:hover { background: #0284c7; }
-        .card-box { background: #334155; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: right; }
-        .price-table { width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 14px; }
-        .price-table th, .price-table td { border: 1px solid #475569; padding: 8px; text-align: center; }
-        .price-table th { background: #0f172a; }
-        .status { margin-top: 15px; color: #22c55e; font-weight: bold; font-size: 14px; }
-        .admin-section { background: #1e293b; border: 1px dashed #0ea5e9; padding: 15px; margin-top: 20px; border-radius: 8px; text-align: right; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>🌐 نظام إدارة شبكة ALSAFA TV</h2>
-        
-        <div id="login-section">
-            <p>يرجى تسجيل الدخول للبدء</p>
-            <input type="text" id="username" placeholder="اسم المستخدم" value="Nadim">
-            <input type="password" id="password" placeholder="كلمة المرور" value="ofsad">
-            <button onclick="login()">دخول للنظام</button>
-        </div>
-
-        <div id="dashboard" style="display:none;">
-            <h3 id="welcome-msg" style="color: #38bdf8;"></h3>
-            <hr style="border-color: #334155; margin: 20px 0;">
-            
-            <h4>🔍 الاستعلام عن كارت / مشترك</h4>
-            <input type="text" id="card-id" placeholder="أدخل رقم الكارت أو المشترك">
-            <button onclick="searchCard()">بحث عن الكارت</button>
-            <div id="search-result" class="card-box" style="display:none;"></div>
-
-            <div id="payment-box" style="display:none; margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 8px; text-align: right;">
-                <h4 style="color: #38bdf8; text-align: center;">💳 نافذة تسديد اشتراك</h4>
-                <label>اختر الباقة والمدة:</label>
-                <select id="pay-months" onchange="updatePrice()">
-                    <option value="2">باقة شهرين - 3000 ريال</option>
-                    <option value="3">باقة 3 أشهر - 4500 ريال</option>
-                    <option value="4">باقة 4 أشهر - 6000 ريال</option>
-                    <option value="6">باقة 6 أشهر - 8000 ريال</option>
-                    <option value="12">باقة سنة (12 شهر) - 15000 ريال</option>
-                </select>
-                <input type="number" id="pay-price" value="3000" placeholder="المبلغ المطلوب">
-                <button onclick="processPayment()">تنفيذ وتأكيد التسديد</button>
-            </div>
-
-            <div style="margin-top: 25px; text-align: right;">
-                <h4 style="color: #cbd5e1;">📋 جدول أسعار باقات نت هوم و ALSAFA TV:</h4>
-                <table class="price-table">
-                    <tr><th>المدة</th><th>السعر الرسمي</th></tr>
-                    <tr><td>شهرين</td><td>3000 ريال</td></tr>
-                    <tr><td>3 أشهر</td><td>4500 ريال</td></tr>
-                    <tr><td>4 أشهر</td><td>6000 ريال</td></tr>
-                    <tr><td>6 أشهر</td><td>8000 ريال</td></tr>
-                    <tr><td>سنة كاملة</td><td>15000 ريال</td></tr>
-                </table>
-            </div>
-
-            <div id="admin-panel" class="admin-section" style="display:none;">
-                <h4 style="color: #f43f5e;">🛠️ لوحة المسؤول (إدارة الوكلاء)</h4>
-                <input type="text" id="new-agent-name" placeholder="اسم الوكيل الجديد">
-                <input type="password" id="new-agent-pass" placeholder="كلمة مرور الوكيل الجديد">
-                <button onclick="addAgent()" style="background: #f43f5e;">إضافة وكيل جديد</button>
-            </div>
-        </div>
-
-        <p class="status">السيرفر السحابي متصل بنجاح 🟢</p>
-    </div>
-
-    <script>
-        let currentUser = "";
-        let isAdmin = false;
-
-        async function login() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: u, password: p})
-            });
-            const data = await res.json();
-            if(res.ok) {
-                currentUser = u;
-                isAdmin = data.is_admin;
-                document.getElementById('login-section').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                document.getElementById('welcome-msg').innerText = "مرحباً بك: " + u;
-                if(isAdmin) {
-                    document.getElementById('admin-panel').style.display = 'block';
-                }
-            } else {
-                alert(data.message);
-            }
-        }
-
-        async function searchCard() {
-            const card = document.getElementById('card-id').value;
-            if(!card) return alert('يرجى إدخال رقم الكارت');
-            const res = await fetch(`/api/search?card=${card}&agent=${currentUser}`);
-            const data = await res.json();
-            
-            const resBox = document.getElementById('search-result');
-            resBox.style.display = 'block';
-            resBox.innerHTML = `
-                <b>رقم الكارت:</b> ${data.card_number}<br>
-                <b>اسم المشترك:</b> ${data.subscriber_name}<br>
-                <b>الحالة:</b> ${data.status || data.status_text}<br>
-                <b>الباقة الحالية:</b> ${data.package}<br>
-                <b>الانتهاء:</b> ${data.expiry_date}
-            `;
-            document.getElementById('payment-box').style.display = 'block';
-        }
-
-        function updatePrice() {
-            const months = document.getElementById('pay-months').value;
-            const prices = {2: 3000, 3: 4500, 4: 6000, 6: 8000, 12: 15000};
-            document.getElementById('pay-price').value = prices[months];
-        }
-
-        async function processPayment() {
-            const card = document.getElementById('card-id').value;
-            const months = document.getElementById('pay-months').value;
-            const price = document.getElementById('pay-price').value;
-
-            const res = await fetch('/api/pay', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({card_number: card, months: months, price: price, agent: currentUser})
-            });
-            const data = await res.json();
-            alert(data.message);
-            if(res.ok) searchCard();
-        }
-
-        async function addAgent() {
-            const name = document.getElementById('new-agent-name').value;
-            const pass = document.getElementById('new-agent-pass').value;
-            const res = await fetch('/api/add-agent', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({admin_user: currentUser, new_username: name, new_password: pass})
-            });
-            const data = await res.json();
-            alert(data.message);
-            if(res.ok) {
-                document.getElementById('new-agent-name').value = '';
-                document.getElementById('new-agent-pass').value = '';
-            }
-        }
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/', methods=['GET'])
-def home():
-    return HTML_CONTENT, 200
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.json or {}
-    username = data.get('username')
-    password = data.get('password')
-
-    if username in agents_db and agents_db[username] == password:
-        is_admin = (username == ADMIN_USER)
-        return jsonify({
-            "message": "تم تسجيل الدخول بنجاح",
-            "username": username,
-            "is_admin": is_admin
-        }), 200
-    else:
-        return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة"}), 401
-
-@app.route('/api/add-agent', methods=['POST'])
-def add_agent():
-    data = request.json or {}
-    admin_user = data.get('admin_user')
-    new_name = data.get('new_username')
-    new_pass = data.get('new_password')
-
-    if admin_user != ADMIN_USER:
-        return jsonify({"message": "غير مسموح إلا للمسؤول الرئيسي"}), 403
-
-    if not new_name or not new_pass:
-        return jsonify({"message": "يرجى إدخال البيانات كاملة"}), 400
-
-    agents_db[new_name] = new_pass
-    return jsonify({"message": f"تم إضافة الوكيل {new_name} بنجاح"}), 200
-
-@app.route('/api/search', methods=['GET'])
+@app.route("/api/search", methods=["GET"])
 def search_card():
-    card_id = request.args.get('card')
-    agent = request.args.get('agent', 'unknown')
+  card_no = request.args.get("card")
 
-    if not card_id:
-        return jsonify({"message": "أدخل رقم الكارت"}), 400
+  if not card_no:
+    return jsonify({"status": "error", "message": "الرجاء إدخال رقم الكارت"}), 400
 
-    audit_logs.insert(0, {"action": "بحث", "card": card_id, "agent": agent})
+  # تنسيق رقم الكارت ليكطابق شكل الجدول (مثلاً 000001 أو الأرقام المدخلة)
+  formatted_card = card_no.zfill(5)  # لضبط الأصفار البادئة إذا لزم الأمر
 
-    # جلب البيانات الحقيقية مباشرة من جهازك المحلي عبر نفق Cloudflare
-    try:
-        bridge_res = requests.get(f"{LOCAL_BRIDGE_URL}/api/search?card={card_id}", timeout=5)
-        if bridge_res.status_code == 200:
-            return jsonify(bridge_res.json()), 200
-    except Exception as e:
-        print(f"Local bridge connection error: {e}")
+  subscriber_name = f"مشترك جديد ({card_no})"
+  state_info = "Not used"
+  package_info = "باقة معتمدة"
+  details_info = "لم يتم العثور على بيانات مطابقة"
 
-    # احتياطي في حال تعذر الاتصال المؤقت
-    return jsonify({
-        "card_number": card_id,
-        "subscriber_name": f"مشترك جديد ({card_id})",
-        "status": "Not used",
-        "package": "غير محددة",
-        "expiry_date": "متاح للتسديد"
-    }), 200
+  try:
+    if os.path.exists(LOG_FILE_PATH):
+      with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+        # البحث في السجلات عن رقم المشترك واستخراج حالته
+        for line in reversed(lines):
+          if card_no in line or formatted_card in line:
+            if "Active" in line or "Activated" in line:
+              state_info = "Active"
+              details_info = "الاشتراك نشط وفعال"
+            elif "ended" in line or "Subscription ended" in line:
+              state_info = "Subscription ended"
+              details_info = "انتهت صلاحية الاشتراك"
+            break
+    else:
+      details_info = "ملف البيانات غير موجود"
+  except Exception as e:
+    details_info = f"خطأ في قراءة البيانات: {str(e)}"
 
-@app.route('/api/pay', methods=['POST'])
-def process_payment():
-    data = request.json or {}
-    card_id = data.get('card_number')
-    months = data.get('months')
-    price = data.get('price')
-    agent = data.get('agent', 'unknown')
+  # إرجاع البيانات لواجهة الويب
+  return jsonify({
+      "status": "success",
+      "card": card_no,
+      "subscriber_name": subscriber_name,
+      "state": state_info,
+      "package": package_info,
+      "details": details_info,
+  })
 
-    if not card_id:
-        return jsonify({"message": "أدخل رقم الكارت"}), 400
 
-    # إرسال طلب التسديد للجسر المحلي
-    try:
-        bridge_res = requests.post(f"{LOCAL_BRIDGE_URL}/api/pay", json={
-            "card_number": card_id,
-            "months": months,
-            "price": price,
-            "agent": agent
-        }, timeout=5)
-        if bridge_res.status_code == 200:
-            return jsonify(bridge_res.json()), 200
-    except Exception as e:
-        print(f"Local bridge payment error: {e}")
-
-    return jsonify({"message": "تمت العملية بنجاح (وضع الاحتياطي)"}), 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+  app.run(host="0.0.0.0", port=5000)
