@@ -135,8 +135,8 @@
 
         async function checkServerStatus() {
             try {
-                const res = await fetch(SERVER_URL + "/");
-                if (res.ok) {
+                const res = await fetch(SERVER_URL + "/api/logs");
+                if (res.ok || res.status === 403 || res.status === 200) {
                     document.getElementById("serverStatus").className = "alert alert-success text-center";
                     document.getElementById("serverStatus").innerText = "السيرفر السحابي متصل ويعمل بنجاح (Online)";
                 } else {
@@ -155,21 +155,4 @@
             const p = document.getElementById("password").value.trim();
 
             try {
-                const response = await fetch(`${SERVER_URL}/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: u, password: p })
-                });
-                const data = await response.json();
-
-                if (response.ok) {
-                    loggedUser = data.username;
-                    isAdmin = data.is_admin;
-                    alert(data.message);
-                    
-                    document.getElementById("loginSection").style.display = "none";
-                    document.getElementById("dashboardSection").style.display = "block";
-                    document.getElementById("welcomeUser").innerText = `مرحباً بك: ${loggedUser} ${isAdmin ? '(مسؤول النظام)' : '(وكيل)'}`;
-
-                    if (isAdmin) {
-                        document.getElementById
+                const response = await fetch(`${SERVER_URL}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) }); const data = await response.json();  if (response.ok) { loggedUser = data.username; isAdmin = data.is_admin; alert(data.message);  document.getElementById("loginSection").style.display = "none"; document.getElementById("dashboardSection").style.display = "block"; document.getElementById("welcomeUser").innerText = `مرحباً بك: ${loggedUser}
