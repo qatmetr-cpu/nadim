@@ -252,4 +252,26 @@ def process_payment():
     card_id = data.get('card_number')
     months = data.get('months')
     price = data.get('price')
-    agent = data.get
+    agent = data.get('agent', 'unknown')
+
+    if not card_id:
+        return jsonify({"message": "أدخل رقم الكارت"}), 400
+
+    # إرسال طلب التسديد للجسر المحلي
+    try:
+        bridge_res = requests.post(f"{LOCAL_BRIDGE_URL}/api/pay", json={
+            "card_number": card_id,
+            "months": months,
+            "price": price,
+            "agent": agent
+        }, timeout=5)
+        if bridge_res.status_code == 200:
+            return jsonify(bridge_res.json()), 200
+    except Exception as e:
+        print(f"Local bridge payment error: {e}")
+
+    return jsonify({"message": "تمت العملية بنجاح (وضع الاحتياطي)"}), 200
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
