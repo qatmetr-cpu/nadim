@@ -4,7 +4,6 @@ from flask import Flask, jsonify, render_template_string, request
 
 app = Flask(__name__)
 
-# قائمة لتسجيل تقارير دخول المستخدمين والعمليات
 login_reports = []
 
 DVCrypt_MASTER_TEMPLATE = """
@@ -17,7 +16,7 @@ DVCrypt_MASTER_TEMPLATE = """
     <style>
         * { box-sizing: border-box; font-family: Tahoma, sans-serif; }
         body { background-color: #262626; color: #000; margin: 0; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .win-box { background: #f0f0f0; border: 1px solid #7a7a7a; border-radius: 3px; width: 100%; max-width: 480px; padding: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); }
+        .win-box { background: #f0f0f0; border: 1px solid #7a7a7a; border-radius: 3px; width: 100%; max-width: 500px; padding: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); }
         .win-header { background: linear-gradient(to bottom, #10336b, #0c2347); color: white; padding: 6px 10px; font-weight: bold; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; margin: -12px -12px 12px -12px; }
         .form-row { margin-bottom: 8px; display: flex; align-items: center; }
         .form-row label { width: 110px; font-size: 0.8rem; font-weight: bold; color: #000; }
@@ -35,6 +34,12 @@ DVCrypt_MASTER_TEMPLATE = """
         .error-msg { color: #d9534f; font-size: 0.8rem; margin-top: 5px; text-align: center; font-weight: bold; }
         .msg { text-align: center; font-size: 0.85rem; margin-top: 5px; font-weight: bold; }
         .report-box { background: #1e293b; color: #38bdf8; padding: 8px; border-radius: 3px; font-size: 0.8rem; max-height: 150px; overflow-y: auto; margin-top: 10px; text-align: right; }
+        
+        /* جدول نتائج البحث المطابق لـ DVCrypt */
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff; font-size: 0.85rem; }
+        .results-table th, .results-table td { border: 1px solid #ccc; padding: 6px; text-align: right; }
+        .results-table th { background: #e9ecef; color: #333; }
+        .results-table tr:hover { background: #e5f1fb; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -88,9 +93,9 @@ DVCrypt_MASTER_TEMPLATE = """
         <div id="loginErr" class="error-msg"></div>
     </div>
 
-    <!-- 3. نافذة البحث الرئيسية -->
+    <!-- 3. نافذة البحث وإظهار جدول النتائج -->
     <div id="step-search" class="step">
-        <div class="win-header"><span id="searchTitle">DVCrypt - البحث عن المشترك</span><span>✕</span></div>
+        <div class="win-header"><span id="searchTitle">DVCrypt - البحث عن المشتركين</span><span>✕</span></div>
         
         <div class="form-row">
             <label>طريقة البحث:</label>
@@ -105,19 +110,34 @@ DVCrypt_MASTER_TEMPLATE = """
         </div>
 
         <div class="btn-row">
-            <button class="win-btn ok" onclick="executeSearch()">بحث واستعراض</button>
+            <button class="win-btn ok" onclick="executeSearch()">بحث (Search)</button>
             <button class="win-btn" onclick="showReports()">تقرير الدخول</button>
         </div>
         <div id="searchErr" class="error-msg"></div>
 
-        <!-- خانة تقرير دخول المستخدمين والنشاطات -->
+        <!-- جدول نتائج البحث لاختيار المشترك المطلوب -->
+        <div id="resultsContainer" style="display:none; max-height: 220px; overflow-y: auto;">
+            <div style="font-weight:bold; font-size:0.85rem; margin-top:8px; color:#333;">نتائج البحث (انقر على المشترك للتعديل):</div>
+            <table class="results-table" id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>رقم الكارت</th>
+                        <th>الاسم الكامل</th>
+                        <th>الهاتف</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- تقرير دخول المستخدمين -->
         <div id="reportContainer" style="display:none;">
             <div style="font-weight:bold; font-size:0.85rem; margin-top:10px; color:#333;">تقرير نشاط ودخول المستخدمين:</div>
             <div class="report-box" id="reportLog">جاري التحميل...</div>
         </div>
     </div>
 
-    <!-- 4. نافذة التعديل والتسديد (Edit subscriber) بعد البحث -->
+    <!-- 4. نافذة التعديل والتسديد (Edit subscriber) -->
     <div id="step-edit" class="step">
         <div class="win-header"><span>Edit subscriber - DVCrypt</span><span>✕</span></div>
         
@@ -193,7 +213,6 @@ DVCrypt_MASTER_TEMPLATE = """
     function doLogin() {
         loggedUser = document.getElementById('accountUser').value;
         
-        // تسجيل الدخول وإرسال سجل الدخول للخادم
         fetch('/api/log-login', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -207,23 +226,40 @@ DVCrypt_MASTER_TEMPLATE = """
     function executeSearch() {
         const mode = document.getElementById('searchMode').value;
         const q = document.getElementById('searchQuery').value;
-        
-        if(!q) { alert("الرجاء إدخال كلمة البحث (رقم الكارت أو الاسم)"); return; }
+        const errDiv = document.getElementById('searchErr');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsBody = document.getElementById('resultsBody');
+
+        errDiv.innerText = "";
+        resultsBody.innerHTML = "";
+
+        if(!q) { errDiv.innerText = "الرجاء إدخال كلمة البحث"; return; }
 
         fetch(`/api/search-sub?ip=${savedIp}&port=${savedPort}&mode=${mode}&q=${q}`)
         .then(res => res.json())
         .then(data => {
-            if(data.status === 'success') {
-                document.getElementById('subId').value = data.card;
-                document.getElementById('subName').value = data.name;
-                document.getElementById('subAddress').value = data.address || '';
-                document.getElementById('subPhone').value = data.phone || '';
-                calculateExpiry();
-                showStep('step-edit'); // الانتقال التلقائي لنافذة التعديل والتسديد
+            if(data.status === 'success' && data.results.length > 0) {
+                resultsContainer.style.display = 'block';
+                data.results.forEach(sub => {
+                    let row = document.createElement('tr');
+                    row.innerHTML = `<td>${sub.card}</td><td>${sub.name}</td><td>${sub.phone || ''}</td>`;
+                    row.onclick = () => selectSubscriber(sub);
+                    resultsBody.appendChild(row);
+                });
             } else {
-                alert("لم يتم العثور على المشترك");
+                errDiv.innerText = "لم يتم العثور على نتائج مطابقة";
+                resultsContainer.style.display = 'none';
             }
         });
+    }
+
+    function selectSubscriber(sub) {
+        document.getElementById('subId').value = sub.card;
+        document.getElementById('subName').value = sub.name;
+        document.getElementById('subAddress').value = sub.address || '';
+        document.getElementById('subPhone').value = sub.phone || '';
+        calculateExpiry();
+        showStep('step-edit');
     }
 
     function calculateExpiry() {
@@ -316,53 +352,4 @@ def search_sub():
         params={"mode": mode, "q": q},
         timeout=3,
     )
-    return jsonify(r.json())
-  except:
-    # رد تجريبي افتراضي يطابق البحث برقم الكارت أو الاسم
-    return jsonify({
-        "status": "success",
-        "card": q if mode == "card" else "00025",
-        "name": (
-            q
-            if mode == "name"
-            else "احمد علي حسين العيدروس (مشترك شبكة الصفاء)"
-        ),
-        "address": "سيئون - المحل الرئيسي",
-        "phone": "+967771948540",
-    })
-
-
-@app.route("/api/save-payment", methods=["POST"])
-def save_payment():
-  data = request.json
-  user = data.get("user")
-  card = data.get("id")
-  price = data.get("price")
-  expiry = data.get("expiry")
-  now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-  # تسجيل العملية في التقرير
-  login_reports.insert(
-      0,
-      f"[{now}] الوكيل ({user}) سدد الكارت ({card}) بمبلغ {price} ريال - ينتهي"
-      f" في: {expiry}",
-  )
-
-  try:
-    r = requests.post(
-        f"http://100.87.45.65:{data['port']}/api/pay", json=data, timeout=3
-    )
-    return jsonify(r.json())
-  except:
-    return jsonify({"status": "success"})
-
-
-@app.route("/api/get-reports", methods=["GET"])
-def get_reports():
-  return jsonify(
-      {"logs": login_reports if login_reports else ["لا توجد تقارير مسجلة بعد"]}
-  )
-
-
-if __name__ == "__main__":
-  app.run(host="0.0.0.0", port=5000)
+    return jsonify(
