@@ -15,7 +15,7 @@ agents_db = {
 cards_cloud_db = {}
 audit_logs = []
 
-# واجهة النظام الشاملة والاحترافية لإدارة شبكة ALSAFA TV
+# الواجهة الكاملة والشاملة (تتضمن لوحة الإدارة، الوكلاء، جدول الأسعار، والتسديد)
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -44,12 +44,12 @@ HTML_CONTENT = """
         <!-- قسم تسجيل الدخول -->
         <div id="login-section">
             <p>يرجى تسجيل الدخول للبدء</p>
-            <input type="text" id="username" placeholder="اسم المستخدم">
-            <input type="password" id="password" placeholder="كلمة المرور">
+            <input type="text" id="username" placeholder="اسم المستخدم" value="Nadim">
+            <input type="password" id="password" placeholder="كلمة المرور" value="ofsad">
             <button onclick="login()">دخول للنظام</button>
         </div>
 
-        <!-- لوحة التحكم الرئيسية -->
+        <!-- لوحة التحكم الرئيسية (مخفية حتى يتم تسجيل الدخول) -->
         <div id="dashboard" style="display:none;">
             <h3 id="welcome-msg" style="color: #38bdf8;"></h3>
             
@@ -60,7 +60,7 @@ HTML_CONTENT = """
             <button onclick="searchCard()">بحث عن الكارت</button>
             <div id="search-result" class="card-box" style="display:none;"></div>
 
-            <!-- قسم التسديد والتمديد -->
+            <!-- نافذة التسديد والتمديد -->
             <div id="payment-box" style="display:none; margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 8px; text-align: right;">
                 <h4 style="color: #38bdf8; text-align: center;">💳 نافذة تسديد اشتراك</h4>
                 <label>اختر الباقة والمدة:</label>
@@ -250,4 +250,28 @@ def search_card():
             "expiry_date": "متاح للتسديد"
         }), 200
 
-@app.route
+@app.route('/api/pay', methods=['POST'])
+def process_payment():
+    data = request.json or {}
+    card_id = data.get('card_number')
+    months = data.get('months')
+    price = data.get('price')
+    agent = data.get('agent', 'unknown')
+
+    if not card_id or not months or not price:
+        return jsonify({"message": "بيانات غير مكتملة"}), 400
+
+    cards_cloud_db[card_id] = {
+        "subscriber_name": f"مشترك كارت {card_id}",
+        "status": "Active",
+        "package": f"باقة {months} أشهر",
+        "expiry_date": f"تم التمديد بمعرفة الوكيل ({agent})"
+    }
+
+    audit_logs.insert(0, {"action": "تسديد", "card": card_id, "months": months, "price": price, "agent": agent})
+
+    return jsonify({"message": f"تم تسديد مبلغ {price} ريال وتمديد الباقة بنجاح!"}), 200
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
