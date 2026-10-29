@@ -1,11 +1,8 @@
 from flask import Flask, render_template_string, request, jsonify
 import socket
-import urllib.request
-import json
 
 app = Flask(__name__)
 
-# إعدادات الشبكة والـ IP المطلوب
 CONFIG = {
     "PC_IP": "192.168.0.160",
     "PC_PORT": 8100,
@@ -13,150 +10,149 @@ CONFIG = {
     "TAILSCALE_PORT": 8101
 }
 
-# قائمة المستخدمين المرتبطة بالنظام (مطابقة لبرنامج DVCrypt)
-USERS = {
-    "admin": "Administrator",
-    "operator": "Operator",
-    "info": "Information",
-    "Anwer": "Anwer",
-    "nadeem": "nadeem",
-    "mohamedahmed": "Mohamed Ahmed",
-    "mohammedsaleh": "mohammed saleh",
-    "abas": "abas alhamed",
-    "Majed": "Majed",
-    "zakariya": "zakariya"
-}
+# قائمة الحسابات مطابقة لبرنامج الكمبيوتر تماماً
+USERS = [
+    {"id": "admin", "name": "Administrator", "icon": "👑"},
+    {"id": "operator", "name": "Operator", "icon": "⚙️"},
+    {"id": "info", "name": "Information", "icon": "ℹ️"},
+    {"id": "Anwer", "name": "Anwer", "icon": "👤"},
+    {"id": "nadeem", "name": "nadeem", "icon": "👤"},
+    {"id": "mohamedahmed", "name": "Mohamed Ahmed", "icon": "👤"},
+    {"id": "mohammedsaleh", "name": "mohammed saleh", "icon": "👤"},
+    {"id": "abas", "name": "abas alhamed", "icon": "👤"},
+    {"id": "Majed", "name": "Majed", "icon": "👤"},
+    {"id": "zakariya", "name": "zakariya", "icon": "👤"}
+]
 
-# واجهة الجوال المطابقة تماماً لبرنامج DVCrypt
+SUBSCRIBERS = [
+    {"sub_id": "000001", "name": "محمد صالح بن الشيخ أبوبكر", "address": "عاقل بالشبكة", "phone": "771721130", "status": "Subscription ended"},
+    {"sub_id": "000002", "name": "محمد سالم عبدالله حسان", "address": "العميده", "phone": "770266215", "status": "Subscription ended"},
+    {"sub_id": "000025", "name": "احمد علي حسين العيدروس", "address": "مريمه", "phone": "775464311", "status": "Active subscriber"},
+    {"sub_id": "000031", "name": "عبدالكريم كرامة التميمي", "address": "الغرفة", "phone": "778436285", "status": "Subscription ended"}
+]
+
+# قالب الواجهة مطابق لبرنامج الكمبيوتر
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DVCrypt Remote Connection</title>
+    <title>DVCrypt Client - Subscribers</title>
     <style>
-        body { font-family: Tahoma, sans-serif; background-color: #1e272e; color: #f5f6fa; margin: 0; padding: 10px; }
-        .card { background: #2f3640; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.4); }
-        h2, h3 { color: #fbc531; text-align: center; }
-        label { display: block; margin-top: 8px; font-size: 14px; color: #dcdde1; }
-        select, input, button { width: 100%; padding: 12px; margin-top: 5px; border-radius: 5px; border: none; font-size: 15px; box-sizing: border-box; }
-        input, select { background: #f5f6fa; color: #2f3640; }
-        button { background-color: #4cd137; color: white; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        button:hover { background-color: #44bd32; }
-        .connection-box { background: #353b48; padding: 10px; border-radius: 5px; border-right: 4px solid #4cd137; margin-bottom: 10px; font-size: 13px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; background: #fff; color: #2f3640; }
-        th, td { border: 1px solid #dcdde1; padding: 8px; text-align: right; }
-        th { background: #f1f2f6; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #dcdde1; margin: 0; padding: 0; color: #000; }
+        .top-bar { background: #e74c3c; color: white; padding: 6px; text-align: center; font-size: 13px; font-weight: bold; }
+        .menu-bar { background: #f5f6fa; border-bottom: 1px solid #bdc3c7; padding: 4px 10px; font-size: 12px; display: flex; gap: 15px; }
+        
+        /* نافذة تسجيل الدخول الشبيهة بالكمبيوتر */
+        .win-window { width: 95%; max-width: 420px; background: #eceff1; border: 1px solid #90a4ae; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin: 40px auto; border-radius: 3px; }
+        .win-header { background: linear-gradient(to bottom, #cfd8dc, #b0bec5); padding: 5px 10px; font-size: 13px; font-weight: bold; border-bottom: 1px solid #90a4ae; display: flex; justify-content: space-between; align-items: center; }
+        .win-body { padding: 15px; }
+        
+        /* قائمة الحسابات مثل ويندوز */
+        .account-box { border: 1px solid #78909c; background: white; height: 160px; overflow-y: scroll; margin-bottom: 10px; }
+        .account-item { padding: 4px 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .account-item:hover, .account-item.selected { background: #0078d7; color: white; }
+        
+        input[type="password"] { width: 100%; padding: 5px; border: 1px solid #78909c; box-sizing: border-box; margin-bottom: 10px; }
+        .win-btn { background: #e0e0e0; border: 1px solid #78909c; padding: 4px 15px; font-size: 13px; cursor: pointer; float: right; border-radius: 2px; }
+        .win-btn:hover { background: #d0d0d0; }
+
+        /* شاشة جدول المشتركين */
+        #dashboard { display: none; padding: 5px; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 11px; }
+        th, td { border: 1px solid #dcdde1; padding: 4px 6px; text-align: left; }
+        th { background: #f1f2f6; font-weight: bold; }
+        .status-active { color: #27ae60; font-weight: bold; }
+        .status-ended { color: #c0392b; }
+        .toolbar { background: #f5f6fa; padding: 5px; border: 1px solid #bdc3c7; margin-bottom: 5px; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <h2>DVCrypt Mobile Client</h2>
-
-    <!-- شاشة إعدادات الاتصال و تسجيل الدخول -->
-    <div id="login-section" class="card">
-        <h3>Connection & Login</h3>
-        
-        <div class="connection-box">
-            <b>Target Server IP:</b> {{ config.PC_IP }}<br>
-            <b>Server Port:</b> {{ config.PC_PORT }}<br>
-            <b>VPN Host:</b> {{ config.TAILSCALE_DOMAIN }}
-        </div>
-
-        <label>Account (اسم المستخدم):</label>
-        <select id="username">
-            {% for user, desc in users.items() %}
-                <option value="{{ user }}">{{ user }} - {{ desc }}</option>
-            {% endfor %}
-        </select>
-
-        <label>Password (كلمة المرور للنظام):</label>
-        <input type="password" id="password" placeholder="أدخل كلمة المرور...">
-
-        <button onclick="connectSystem()">OK (اتصال ودخول)</button>
+    <div class="top-bar">Free license (non-professional use).</div>
+    <div class="menu-bar">
+        <span><b>Main</b></span>
+        <span><b>View</b></span>
+        <span><b>?</b></span>
+        <span style="margin-left:auto; color: #555;">Server IP: {{ config.PC_IP }}:{{ config.PC_PORT }}</span>
     </div>
 
-    <!-- واجهة النظام بعد الربط الناجح -->
-    <div id="dashboard-section" class="card" style="display:none;">
-        <h3>قائمة المشتركين النشطين (Subscribers)</h3>
-        <p style="color: #4cd137; font-size: 12px; text-align:center;">متصل بنجاح بالخادم الأساسي على IP: {{ config.PC_IP }}</p>
-        
-        <button onclick="logout()" style="background: #e84118; padding: 8px; margin-bottom: 10px;">قطع الاتصال / خروج</button>
-        
-        <div style="overflow-x:auto;">
+    <!-- نافذة تسجيل الدخول (مطابقة للصورة الأولى) -->
+    <div id="login-window" class="win-window">
+        <div class="win-header">
+            <span>Login</span>
+            <span>✕</span>
+        </div>
+        <div class="win-body">
+            <div style="font-size: 12px; margin-bottom: 4px;">Account</div>
+            <div class="account-box" id="account-list">
+                {% for u in users %}
+                <div class="account-item {% if loop.first %}selected{% endif %}" onclick="selectUser('{{ u.id }}', this)">
+                    <span>{{ u.icon }}</span> <b>{{ u.id }}</b> <span style="color: #555; margin-left: auto;">{{ u.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div style="font-size: 12px; margin-bottom: 4px;">Password</div>
+            <input type="password" id="password" placeholder="أدخل كلمة المرور...">
+            
+            <div style="overflow: hidden;">
+                <button class="win-btn" onclick="doLogin()">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- واجهة النظام وجدول المشتركين (مطابقة للصورة الثانية) -->
+    <div id="dashboard">
+        <div class="toolbar">
+            <span>🗂️ <b>DVCrypt Client - Subscribers</b></span>
+            <button onclick="doLogout()" style="float:left; font-size:11px; padding:2px 8px;">Logout</button>
+        </div>
+        <div style="overflow-x: auto;">
             <table>
                 <thead>
                     <tr>
                         <th>Subscriber ID</th>
                         <th>Name</th>
+                        <th>Address</th>
                         <th>Phone</th>
                         <th>Status</th>
                     </tr>
                 </thead>
-                <tbody id="subscribers-list">
+                <tbody>
+                    {% for sub in subscribers %}
                     <tr>
-                        <td colspan="4" style="text-align:center;">جاري جلب البيانات من الكمبيوتر الرئيسي...</td>
+                        <td><b>{{ sub.sub_id }}</b></td>
+                        <td>{{ sub.name }}</td>
+                        <td>{{ sub.address }}</td>
+                        <td>{{ sub.phone }}</td>
+                        <td><span class="{{ 'status-active' if 'Active' in sub.status else 'status-ended' }}">{{ sub.status }}</span></td>
                     </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
     <script>
-        function connectSystem() {
-            let user = document.getElementById('username').value;
+        let selectedUser = 'admin';
+        function selectUser(userId, element) {
+            document.querySelectorAll('.account-item').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedUser = userId;
+        }
+
+        function doLogin() {
             let pass = document.getElementById('password').value;
-
-            // إرسال طلب تسجيل الدخول والربط للسيرفر
-            fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert('تم الربط والاتصال بنجاح مع السيرفر الرئيسي!');
-                    document.getElementById('login-section').style.display = 'none';
-                    document.getElementById('dashboard-section').style.display = 'block';
-                    loadSubscribers();
-                } else {
-                    alert('فشل الاتصال: ' + data.message);
-                }
-            })
-            .catch(err => {
-                // في حال التجربة المباشرة
-                document.getElementById('login-section').style.display = 'none';
-                document.getElementById('dashboard-section').style.display = 'block';
-                loadMockData();
-            });
+            // الدخول المباشر وعرض واجهة البرنامج تماماً مثل الكمبيوتر
+            document.getElementById('login-window').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
         }
 
-        function loadSubscribers() {
-            fetch('/api/subscribers')
-            .then(res => res.json())
-            .then(data => {
-                let tbody = document.getElementById('subscribers-list');
-                tbody.innerHTML = '';
-                data.forEach(sub => {
-                    tbody.innerHTML += `<tr><td>${sub.id}</td><td>${sub.name}</td><td>${sub.phone}</td><td>${sub.status}</td></tr>`;
-                });
-            });
-        }
-
-        function loadMockData() {
-            let tbody = document.getElementById('subscribers-list');
-            tbody.innerHTML = `
-                <tr><td>000001</td><td>محمد صالح بن الشيخ أبوبكر</td><td>771721130</td><td style="color:red">Subscription ended</td></tr>
-                <tr><td>000025</td><td>احمد علي حسين العيدروس</td><td>775464311</td><td style="color:green">Active subscriber</td></tr>
-                <tr><td>000005</td><td>علي سالم احمد الحديد</td><td>772854654</td><td style="color:green">Active</td></tr>
-            `;
-        }
-
-        function logout() {
-            document.getElementById('login-section').style.display = 'block';
-            document.getElementById('dashboard-section').style.display = 'none';
+        function doLogout() {
+            document.getElementById('login-window').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
         }
     </script>
 </body>
@@ -165,25 +161,7 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE, config=CONFIG, users=USERS)
-
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    data = request.json
-    username = data.get('username')
-    # توجيه الربط والتحقق عبر IP الكمبيوتر الرئيسي 192.168.0.160 المنفذ 8100
-    return jsonify({"status": "success", "message": f"Connected to {CONFIG['PC_IP']}:{CONFIG['PC_PORT']}"})
-
-@app.route('/api/subscribers', methods=['GET'])
-def api_subscribers():
-    # جلب بيانات المشتركين المحدثة من السيرفر المحلي عبر الإيثرنت
-    subscribers = [
-        {"id": "000001", "name": "محمد صالح بن الشيخ أبوبكر", "phone": "771721130", "status": "Subscription ended"},
-        {"id": "000025", "name": "احمد علي حسين العيدروس", "phone": "775464311", "status": "Active subscriber"},
-        {"id": "000005", "name": "علي سالم احمد الحديد", "phone": "772854654", "status": "Active"}
-    ]
-    return jsonify(subscribers)
+    return render_template_string(HTML_TEMPLATE, config=CONFIG, users=USERS, subscribers=SUBSCRIBERS)
 
 if __name__ == '__main__':
-    # تشغيل السيرفر ليستقبل الاتصالات المحولة من Tailscale Funnel على المنفذ 8101
     app.run(host='0.0.0.0', port=8101)
